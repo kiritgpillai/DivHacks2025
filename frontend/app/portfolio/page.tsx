@@ -76,7 +76,8 @@ export default function PortfolioBuilderPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create portfolio')
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to create portfolio')
       }
 
       const data = await response.json()
