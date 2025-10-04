@@ -1,0 +1,53 @@
+# Market Mayhem - Latest Versions (No Constraints)
+# Testing latest versions without version constraints
+
+# FastAPI & Web Framework
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+websockets
+python-multipart
+
+# LangChain & LangGraph
+langgraph
+langchain-core
+langchain-google-genai
+langchain-community
+langsmith
+
+# Google AI
+google-generativeai
+
+# News & Data
+tavily-python
+yfinance
+
+# Observability
+opik
+
+# Database
+asyncpg
+sqlalchemy
+
+# Cache
+redis
+hiredis
+
+# Data Processing
+pandas
+numpy
+
+# Utilities
+httpx
+python-json-logger
+
+# Testing
+pytest
+pytest-asyncio
+rich
+
+# Development
+black
+flake8
+mypy
