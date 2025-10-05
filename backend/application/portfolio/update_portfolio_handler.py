@@ -51,7 +51,7 @@ class UpdatePortfolioHandler:
         # Step 1: Fetch portfolio from Supabase
         portfolio = await self._fetch_portfolio(portfolio_id)
         
-        # Step 2: Get position before update
+        # Step 2: Get position before update and calculate previous total portfolio value
         position_before = portfolio.get_position(ticker)
         if not position_before:
             raise ValueError(f"Position not found for ticker: {ticker}")
@@ -59,6 +59,9 @@ class UpdatePortfolioHandler:
         value_before = position_before.calculate_value()
         shares_before = position_before.shares
         allocation_before = position_before.allocation
+        
+        # Calculate previous total portfolio value before any updates
+        previous_total_value = portfolio.calculate_total_value()
         
         # Step 3: Apply decision to portfolio and calculate P/L correctly
         pl_dollars = Decimal(0)
@@ -122,6 +125,10 @@ class UpdatePortfolioHandler:
         # Step 4: Calculate new portfolio value
         new_total_value = portfolio.calculate_total_value()
         
+        # Step 4.5: Recalculate pl_percent using portfolio-based calculation
+        # Override the position-based calculation with portfolio-based calculation
+        pl_percent = (pl_dollars / previous_total_value) if previous_total_value > 0 else Decimal(0)
+        
         # Step 5: Persist to Supabase
         await self._save_portfolio(portfolio)
         
@@ -163,6 +170,7 @@ class UpdatePortfolioHandler:
             "shares_after": float(shares_after),
             "allocation_before": float(allocation_before),
             "allocation_after": float(allocation_after),
+            "previous_total_value": _clean_number(previous_total_value),
             "new_total_value": _clean_number(new_total_value),
             "cash": float(portfolio.cash),
             "positions": [
