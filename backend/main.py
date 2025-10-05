@@ -1,6 +1,9 @@
-# Fix Python path to allow imports from project root
+# Fix Python path to allow imports from backend and project root
 import sys
 from pathlib import Path
+# Add backend/ so imports like `from application...` and `from infrastructure...` resolve
+sys.path.insert(0, str(Path(__file__).parent))
+# Add project root as well
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Load environment variables FIRST (before any imports that need API keys)
