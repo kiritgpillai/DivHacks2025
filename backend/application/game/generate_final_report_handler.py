@@ -78,11 +78,21 @@ class GenerateFinalReportHandler:
         # Get the actual initial portfolio value (not hardcoded)
         initial_portfolio_value = await self._get_initial_portfolio_value(game_id)
         
-        # Calculate total P/L as the difference between final and initial values
-        total_pl = final_portfolio_value - initial_portfolio_value
+        # Calculate final value as current portfolio value / 1,000,000 (in millions)
+        final_value_in_millions = final_portfolio_value / 1_000_000
+        
+        # Calculate total P/L as the difference between final and initial values (in millions)
+        total_pl_in_millions = (final_portfolio_value - initial_portfolio_value) / 1_000_000
+        
+        # Debug logging
+        print(f"DEBUG Final Report Calculation:")
+        print(f"  final_portfolio_value: {final_portfolio_value}")
+        print(f"  initial_portfolio_value: {initial_portfolio_value}")
+        print(f"  total_pl_in_millions: {total_pl_in_millions}")
+        print(f"  rounded_total_pl: {int(round(total_pl_in_millions))}")
         
         # Calculate return percentage based on actual initial investment
-        total_return = (total_pl / initial_portfolio_value) * 100 if initial_portfolio_value > 0 else 0
+        total_return = (total_pl_in_millions * 1_000_000 / initial_portfolio_value) * 100 if initial_portfolio_value > 0 else 0
         
         return {
             "game_id": game_id,
@@ -90,8 +100,8 @@ class GenerateFinalReportHandler:
             "coaching": coaching_tips,
             "summary": {
                 "total_rounds": len(decision_logs),
-                "final_portfolio_value": final_portfolio_value,
-                "total_pl": total_pl,
+                "final_portfolio_value": int(round(final_value_in_millions)),
+                "total_pl": int(round(total_pl_in_millions)),
                 "total_return_pct": round(total_return, 2),
                 "data_tab_usage": metrics.get("data_tab_usage", 0),
                 "consensus_alignment": metrics.get("consensus_alignment", 0)

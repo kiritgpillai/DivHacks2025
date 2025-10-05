@@ -139,10 +139,6 @@ class SubmitDecisionHandler:
         pl_dollars = float(round_pl_dollars)
         previous_total_value = portfolio_update.get("previous_total_value", 0) if portfolio_update else 0
         pl_percent = (pl_dollars / previous_total_value) if previous_total_value > 0 else 0.0
-        print(f"DEBUG P/L Calculation:")
-        print(f"  pl_dollars: {pl_dollars}")
-        print(f"  previous_total_value: {previous_total_value}")
-        print(f"  pl_percent: {pl_percent}")
         # Clean near-zero noise
         if abs(pl_dollars) < 1e-9:
             pl_dollars = 0.0
