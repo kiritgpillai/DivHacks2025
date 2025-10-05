@@ -3,6 +3,7 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+from backend.config import GEMINI_MODEL, TEMPERATURE_NEWS
 from .tools.news_tools import (
     fetch_ticker_news,
     assign_headline_stance,
@@ -16,7 +17,7 @@ with open(os.path.join(PROMPTS_DIR, "news_agent_prompt.md"), "r", encoding="utf-
     NEWS_PROMPT = f.read()
 
 # Initialize LLM
-llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.2)
+llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_NEWS)
 
 # Create News Agent
 news_agent = create_react_agent(

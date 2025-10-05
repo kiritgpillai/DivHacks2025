@@ -5,6 +5,7 @@ from langchain.tools import tool
 import json
 import random
 import google.generativeai as genai
+from backend.config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
@@ -88,7 +89,7 @@ async def generate_event_description(ticker: str, event_type: str) -> str:
         Event description (2-3 sentences)
     """
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel(GEMINI_MODEL)
         
         templates = {
             "EARNINGS_SURPRISE": f"Create a realistic earnings surprise event for {ticker}. Include specific numbers (EPS beat/miss %), pre-market reaction, and key details like revenue and guidance.",

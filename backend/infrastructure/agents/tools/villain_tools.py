@@ -5,6 +5,7 @@ from langchain.tools import tool
 import json
 import random
 import google.generativeai as genai
+from backend.config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
@@ -113,7 +114,7 @@ async def generate_hot_take(
         JSON with hot take text
     """
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel(GEMINI_MODEL)
         
         prompt = f"""You are a trash-talking Villain AI in a trading game. Generate a bold, emotionally charged hot take.
 

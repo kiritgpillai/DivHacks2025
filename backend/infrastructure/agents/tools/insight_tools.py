@@ -5,6 +5,7 @@ from langchain.tools import tool
 import json
 from typing import List, Dict
 import google.generativeai as genai
+from backend.config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
@@ -28,7 +29,7 @@ async def write_neutral_tip(
         One-sentence educational tip
     """
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel(GEMINI_MODEL)
         
         prompt = f"""Write a neutral, educational tip for a trading game Data tab.
 
@@ -156,7 +157,7 @@ async def generate_coaching(decision_logs: str, profile: str) -> str:
     try:
         logs = json.loads(decision_logs)
         
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel(GEMINI_MODEL)
         
         # Summarize key patterns from logs
         summary = _summarize_decision_patterns(logs)

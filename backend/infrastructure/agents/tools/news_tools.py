@@ -13,6 +13,7 @@ except ImportError:
     tavily = None
 
 import google.generativeai as genai
+from backend.config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
@@ -88,7 +89,7 @@ async def assign_headline_stance(headline: str, event_context: str = "") -> str:
         Stance classification: "Bull", "Bear", or "Neutral"
     """
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel(GEMINI_MODEL)
         
         prompt = f"""Classify this stock market headline as Bull (positive), Bear (negative), or Neutral.
 

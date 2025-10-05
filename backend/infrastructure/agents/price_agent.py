@@ -3,6 +3,7 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+from backend.config import GEMINI_MODEL, TEMPERATURE_PRICE
 from .tools.price_tools import (
     get_price_snapshot,
     get_sparkline,
@@ -18,7 +19,7 @@ with open(os.path.join(PROMPTS_DIR, "price_agent_prompt.md"), "r", encoding="utf
     PRICE_PROMPT = f.read()
 
 # Initialize LLM
-llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.1)
+llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_PRICE)
 
 # Create Price Agent
 price_agent = create_react_agent(

@@ -3,8 +3,9 @@
 from typing import TypedDict, Annotated, Literal
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.config import GEMINI_MODEL, TEMPERATURE_SUPERVISOR
 
 from .event_generator_agent import event_generator_agent
 from .portfolio_agent import portfolio_agent
@@ -130,7 +131,7 @@ def create_supervisor_node(llm: ChatGoogleGenerativeAI):
 
 
 # Create supervisor LLM
-supervisor_llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0)
+supervisor_llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_SUPERVISOR)
 
 # Create supervisor node
 supervisor = create_supervisor_node(supervisor_llm)
@@ -205,7 +206,9 @@ async def start_round(
         Round data with event, villain take, news, data tab
     """
     initial_state = {
-        "messages": [],
+        "messages": [
+            HumanMessage(content=f"Start round {round_number}. Portfolio: {portfolio}. Portfolio value: ${portfolio_value:,.2f}. Generate a new market event scenario.")
+        ],
         "game_id": game_id,
         "portfolio_id": portfolio_id,
         "round_number": round_number,
@@ -266,7 +269,9 @@ async def process_decision(
         Outcome data with P/L and behavior tracking
     """
     initial_state = {
-        "messages": [],
+        "messages": [
+            HumanMessage(content=f"Player decision: {player_decision}. Decision time: {decision_time:.2f}s. Opened data tab: {opened_data_tab}. Calculate outcome based on historical case.")
+        ],
         "game_id": game_id,
         "round_number": round_number,
         "player_decision": player_decision,

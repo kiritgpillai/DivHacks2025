@@ -42,19 +42,28 @@ export default function GamePage() {
   const [startTime, setStartTime] = useState<number>(Date.now())
   
   const wsRef = useRef<WebSocket | null>(null)
+  const hasStartedRef = useRef(false)
 
   // WebSocket connection
   useEffect(() => {
+    // Prevent duplicate connections
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return
+    }
+
     const ws = new WebSocket(`${WS_URL}/game/${gameId}/ws`)
     wsRef.current = ws
 
     ws.onopen = () => {
       console.log('WebSocket connected')
-      // Start first round
-      ws.send(JSON.stringify({
-        type: 'start_round',
-        round_number: 1
-      }))
+      // Start first round only once
+      if (!hasStartedRef.current) {
+        hasStartedRef.current = true
+        ws.send(JSON.stringify({
+          type: 'start_round',
+          round_number: 1
+        }))
+      }
     }
 
     ws.onmessage = (event) => {
@@ -88,19 +97,25 @@ export default function GamePage() {
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error)
-      setState(prev => ({
-        ...prev,
-        error: 'Connection error. Please refresh.',
-        loading: false
-      }))
     }
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected')
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected', event.code, event.reason)
+      // Only show error if it wasn't a clean close
+      if (event.code !== 1000 && event.code !== 1001) {
+        setState(prev => ({
+          ...prev,
+          error: 'Connection lost. Please refresh the page.',
+          loading: false
+        }))
+      }
     }
 
     return () => {
-      ws.close()
+      // Clean close
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close(1000, 'Component unmounting')
+      }
     }
   }, [gameId])
 

@@ -3,6 +3,7 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+from backend.config import GEMINI_MODEL, TEMPERATURE_INSIGHT
 from .tools.insight_tools import (
     write_neutral_tip,
     classify_profile,
@@ -17,7 +18,7 @@ with open(os.path.join(PROMPTS_DIR, "insight_agent_prompt.md"), "r", encoding="u
     INSIGHT_PROMPT = f.read()
 
 # Initialize LLM
-llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.4)
+llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_INSIGHT)
 
 # Create Insight Agent
 insight_agent = create_react_agent(

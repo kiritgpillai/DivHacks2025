@@ -360,7 +360,9 @@ async def game_websocket(websocket: WebSocket, game_id: str):
         print(f"Client disconnected from game {game_id}")
     except Exception as e:
         print(f"WebSocket error for game {game_id}: {str(e)}")
-        await websocket.close(code=1011, reason=str(e))
+        # Truncate error message to fit in WebSocket control frame (max 125 bytes)
+        error_msg = str(e)[:100]
+        await websocket.close(code=1011, reason=error_msg)
 
 
 # === Development Info Endpoints ===

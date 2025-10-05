@@ -3,6 +3,7 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.prebuilt import create_react_agent
+from backend.config import GEMINI_MODEL, TEMPERATURE_PORTFOLIO
 from .tools.portfolio_tools import (
     validate_ticker,
     get_current_price,
@@ -16,7 +17,7 @@ with open(os.path.join(PROMPTS_DIR, "portfolio_agent_prompt.md"), "r", encoding=
     PORTFOLIO_PROMPT = f.read()
 
 # Initialize LLM
-llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_PORTFOLIO)
 
 # Create Portfolio Agent
 portfolio_agent = create_react_agent(
