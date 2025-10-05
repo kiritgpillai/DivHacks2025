@@ -175,7 +175,7 @@ class UpdatePortfolioHandler:
             id=portfolio_data["id"],
             player_id=portfolio_data["player_id"],
             risk_profile=RiskProfile(portfolio_data["risk_profile"]),
-            initial_cash=float(portfolio_data.get("cash", 0))  # Use remaining cash as initial
+            initial_cash=float(portfolio_data.get("initial_cash", 1_000_000))  # Use original starting cash
         )
         
         # Reconstruct positions
