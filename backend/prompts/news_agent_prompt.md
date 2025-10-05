@@ -31,9 +31,9 @@ Headlines that indicate positive outcomes or price appreciation:
 - Regulatory approvals, resolved issues
 
 **Examples**:
-- "Tesla beats Q4 earnings by 15%" → **Bull**
-- "Analysts raise Apple price targets" → **Bull**
-- "Meta announces record user growth" → **Bull**
+- "[TICKER] beats Q4 earnings by [X]%" → **Bull**
+- "Analysts raise [TICKER] price targets" → **Bull**
+- "[TICKER] announces record [metric] growth" → **Bull**
 
 ### Bear (Negative) 🔴
 Headlines that indicate negative outcomes or price depreciation:
@@ -44,9 +44,9 @@ Headlines that indicate negative outcomes or price depreciation:
 - Regulatory fines, investigations
 
 **Examples**:
-- "Amazon misses revenue estimates" → **Bear**
-- "EU fines Google $2.3B for antitrust" → **Bear**
-- "Tesla recalls 1M vehicles" → **Bear**
+- "[TICKER] misses revenue estimates" → **Bear**
+- "[REGULATOR] fines [TICKER] $[X.X]B for [violation]" → **Bear**
+- "[TICKER] recalls [X]M [products]" → **Bear**
 
 ### Neutral ⚪
 Headlines that are informational without clear direction:
@@ -56,9 +56,9 @@ Headlines that are informational without clear direction:
 - Pure facts without sentiment
 
 **Examples**:
-- "Microsoft announces quarterly results" → **Neutral** (if no beat/miss mentioned)
-- "Apple holds annual shareholder meeting" → **Neutral**
-- "NVDA trading volume increases" → **Neutral**
+- "[TICKER] announces quarterly results" → **Neutral** (if no beat/miss mentioned)
+- "[TICKER] holds annual shareholder meeting" → **Neutral**
+- "[TICKER] trading volume increases" → **Neutral**
 
 ## Consensus Calculation
 
@@ -100,19 +100,19 @@ Where opposing = Bull headlines when Villain is Bearish, or Bear headlines when 
 ## Workflow
 
 ```
-1. Think: Need to fetch headlines for TSLA
-2. Act: fetch_ticker_news("TSLA", days=3)
-3. Observe: Got 3 headlines
+1. Think: Need to fetch headlines for [TICKER]
+2. Act: fetch_ticker_news("[TICKER]", days=3)
+3. Observe: Got [X] headlines
 4. Think: Classify first headline stance
-5. Act: assign_headline_stance("Tesla beats Q4 earnings", "earnings_beat")
-6. Observe: "Bull"
+5. Act: assign_headline_stance("[HEADLINE]", "[EVENT_CONTEXT]")
+6. Observe: "[STANCE]"
 7. (Repeat for all headlines)
 8. Think: Calculate overall consensus
 9. Act: calculate_consensus(headlines)
-10. Observe: "Two-thirds Bull"
-11. Think: Villain said "Bearish" - how much do headlines disagree?
-12. Act: compute_contradiction_vs_villain(headlines, "Bearish")
-13. Observe: 0.67 (67% disagreement)
+10. Observe: "[CONSENSUS]"
+11. Think: Villain said "[VILLAIN_STANCE]" - how much do headlines disagree?
+12. Act: compute_contradiction_vs_villain(headlines, "[VILLAIN_STANCE]")
+13. Observe: [SCORE] ([PERCENTAGE]% disagreement)
 14. Final Answer: Return complete analysis
 ```
 

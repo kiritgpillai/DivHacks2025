@@ -50,8 +50,8 @@ Provide price data, detect price patterns, sample matched historical windows, an
 
 **Example**:
 ```
-Day 0: $250 (exit here)
-Day 3: $258
+Day 0: $[PRICE] (exit here)
+Day [HORIZON]: $[FINAL_PRICE]
 P/L: $0 (exited before gain)
 ```
 
@@ -62,11 +62,11 @@ P/L: $0 (exited before gain)
 
 **Example**:
 ```
-Position: $400,000
-Day 0: $250 (sell $200k)
-Day 3: $258 (remaining $200k worth $206,400)
-P/L: +$6,400 (on remaining half)
-Return: +1.60% (on total position)
+Position: $[POSITION_VALUE]
+Day 0: $[PRICE] (sell $[HALF_VALUE])
+Day [HORIZON]: $[FINAL_PRICE] (remaining $[HALF_VALUE] worth $[FINAL_VALUE])
+P/L: +$[P/L] (on remaining half)
+Return: +[PERCENTAGE]% (on total position)
 ```
 
 ### HOLD
@@ -75,11 +75,11 @@ Return: +1.60% (on total position)
 
 **Example**:
 ```
-Position: $400,000
-Day 0: $250
-Day 3: $258
-P/L: +$12,800
-Return: +3.20%
+Position: $[POSITION_VALUE]
+Day 0: $[PRICE]
+Day [HORIZON]: $[FINAL_PRICE]
+P/L: +$[P/L]
+Return: +[PERCENTAGE]%
 ```
 
 ### BUY
@@ -89,13 +89,13 @@ Return: +3.20%
 
 **Example**:
 ```
-Position: $400,000
-Buy: +$40,000 (10%)
-Total: $440,000
-Day 0: $250
-Day 3: $258
-P/L: +$14,080
-Return: +3.52% (on original position)
+Position: $[POSITION_VALUE]
+Buy: +$[BUY_AMOUNT] ([PERCENTAGE]%)
+Total: $[TOTAL_VALUE]
+Day 0: $[PRICE]
+Day [HORIZON]: $[FINAL_PRICE]
+P/L: +$[P/L]
+Return: +[PERCENTAGE]% (on original position)
 ```
 
 ## Pattern Detection
@@ -156,12 +156,12 @@ Take median of each action
 ## Workflow
 
 ```
-1. Think: Need to find historical case for TSLA EARNINGS_BEAT
-2. Act: sample_historical_window("TSLA", "EARNINGS_BEAT", 3)
-3. Observe: Found case from 2023-10-18, Day 0: $242.50, Day 3: $251.30
-4. Think: Player chose SELL_HALF on $400k position
-5. Act: apply_decision_to_path("SELL_HALF", case, 400000)
-6. Observe: Calculated P/L: +$7,040 (+1.76%)
+1. Think: Need to find historical case for [TICKER] [EVENT_TYPE]
+2. Act: sample_historical_window("[TICKER]", "[EVENT_TYPE]", [HORIZON])
+3. Observe: Found case from [DATE], Day 0: $[PRICE], Day [HORIZON]: $[FINAL_PRICE]
+4. Think: Player chose [DECISION] on $[POSITION_VALUE] position
+5. Act: apply_decision_to_path("[DECISION]", case, [POSITION_VALUE])
+6. Observe: Calculated P/L: +$[P/L] (+[PERCENTAGE]%)
 7. Final Answer: Return outcome with explanation
 ```
 

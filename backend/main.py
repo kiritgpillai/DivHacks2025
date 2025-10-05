@@ -14,6 +14,25 @@ from typing import List, Dict, Optional
 import os
 import json
 
+# Initialize Supabase client
+try:
+    from supabase import create_client, Client
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        SUPABASE_AVAILABLE = True
+        print("✅ Supabase client initialized")
+    else:
+        supabase = None
+        SUPABASE_AVAILABLE = False
+        print("⚠️  SUPABASE_URL or SUPABASE_KEY not set. Using in-memory storage.")
+except ImportError:
+    supabase = None
+    SUPABASE_AVAILABLE = False
+    print("⚠️  Supabase package not installed. Run: pip install supabase")
+
 # Import application handlers (these import agents which need API keys)
 from backend.application.portfolio.create_portfolio_handler import CreatePortfolioHandler
 from backend.application.game.start_game_handler import StartGameHandler
@@ -70,11 +89,17 @@ app.add_middleware(
 
 # === Dependency Injection ===
 
-# Initialize handlers
-create_portfolio_handler = CreatePortfolioHandler()
-start_game_handler = StartGameHandler()
+# In-memory storage for MVP (replace with database in production)
+# Key: game_id, Value: {"portfolio_id": str, "portfolio": dict, "portfolio_value": float}
+game_sessions_store = {}
+# Key: portfolio_id, Value: {"positions": dict, "total_value": float, "risk_profile": str}
+portfolios_store = {}
+
+# Initialize handlers with Supabase client
+create_portfolio_handler = CreatePortfolioHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
+start_game_handler = StartGameHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
 start_round_handler = StartRoundHandler()
-submit_decision_handler = SubmitDecisionHandler()
+submit_decision_handler = SubmitDecisionHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
 generate_final_report_handler = GenerateFinalReportHandler()
 
 
@@ -155,6 +180,15 @@ async def create_portfolio(request: CreatePortfolioRequest):
             risk_profile=request.risk_profile
         )
         
+        # Store portfolio in memory for MVP
+        portfolio_id = result["portfolio_id"]
+        portfolios_store[portfolio_id] = {
+            "positions": request.allocations,  # {ticker: allocation_dollars}
+            "total_value": result["total_value"],
+            "risk_profile": request.risk_profile,
+            "player_id": request.player_id
+        }
+        
         return {
             "success": True,
             "portfolio": result
@@ -182,17 +216,67 @@ async def start_game(request: StartGameRequest):
     Start a new game session
     
     Creates game session record and initializes round counter.
+    Integrates with Supabase for persistence and Opik for observability.
     """
     try:
+        # Validate portfolio exists (check Supabase first, then in-memory)
+        if SUPABASE_AVAILABLE:
+            # Validate in Supabase
+            portfolio_check = supabase.table("portfolios").select("id").eq("id", request.portfolio_id).execute()
+            if not portfolio_check.data or len(portfolio_check.data) == 0:
+                raise HTTPException(status_code=404, detail=f"Portfolio {request.portfolio_id} not found")
+        else:
+            # Validate in memory
+            if request.portfolio_id not in portfolios_store:
+                raise HTTPException(status_code=404, detail=f"Portfolio {request.portfolio_id} not found")
+        
+        # Start game (handler saves to Supabase if available)
         result = await start_game_handler.execute(
             portfolio_id=request.portfolio_id
         )
+        
+        game_id = result["game_id"]
+        
+        # Cache game session in memory for fast access
+        # This ensures dynamic portfolio data flows through the entire game
+        if SUPABASE_AVAILABLE:
+            # Fetch dynamic portfolio data from Supabase
+            portfolio_data = supabase.table("portfolios").select("*").eq("id", request.portfolio_id).execute()
+            positions_data = supabase.table("positions").select("*").eq("portfolio_id", request.portfolio_id).execute()
+            
+            if not portfolio_data.data or len(portfolio_data.data) == 0:
+                raise HTTPException(status_code=404, detail=f"Portfolio {request.portfolio_id} not found in database")
+            
+            # Build dynamic portfolio dict from user's actual positions
+            portfolio_dict = {}
+            for pos in positions_data.data:
+                portfolio_dict[pos["ticker"]] = float(pos["allocation"])
+            
+            game_sessions_store[game_id] = {
+                "portfolio_id": request.portfolio_id,
+                "portfolio": portfolio_dict,  # DYNAMIC: User's actual tickers and allocations
+                "portfolio_value": float(portfolio_data.data[0]["total_value"]),
+                "risk_profile": portfolio_data.data[0]["risk_profile"],
+                "current_round": 0
+            }
+        else:
+            # Use in-memory data (fallback)
+            portfolio = portfolios_store[request.portfolio_id]
+            game_sessions_store[game_id] = {
+                "portfolio_id": request.portfolio_id,
+                "portfolio": portfolio["positions"],  # DYNAMIC: User's actual tickers
+                "portfolio_value": portfolio["total_value"],
+                "risk_profile": portfolio["risk_profile"],
+                "current_round": 0
+            }
         
         return {
             "success": True,
             "game": result
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -203,23 +287,79 @@ async def start_round(game_id: str, round_number: int):
     Start a new game round
     
     Invokes multi-agent graph to generate:
-    - Event (Event Generator Agent)
+    - Event (Event Generator Agent) - uses DYNAMIC portfolio tickers
     - News headlines + consensus (News Agent)
     - Price data + pattern (Price Agent)
     - Villain hot take (Villain Agent)
     - Neutral tip (Insight Agent)
+    
+    All agents receive the user's actual portfolio (NO hardcoded tickers).
     """
     try:
+        # Validate game session exists
+        if game_id not in game_sessions_store:
+            raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+        
+        # Fetch DYNAMIC game session data (user's actual portfolio)
+        game_session = game_sessions_store[game_id]
+        
+        # Log round start to Opik
+        try:
+            from backend.infrastructure.observability.opik_tracer import log_game_event
+            log_game_event("round_start", {
+                "game_id": game_id,
+                "round_number": round_number,
+                "portfolio": game_session["portfolio"],  # DYNAMIC: User's actual tickers
+                "portfolio_value": game_session["portfolio_value"],
+                "supabase_enabled": SUPABASE_AVAILABLE
+            })
+        except Exception as e:
+            print(f"Warning: Failed to log round start to Opik: {e}")
+        
+        # Execute round with DYNAMIC portfolio (user's actual tickers)
         result = await start_round_handler.execute(
             game_id=game_id,
-            round_number=round_number
+            round_number=round_number,
+            portfolio=game_session["portfolio"],        # DYNAMIC: User's tickers
+            portfolio_value=game_session["portfolio_value"]
         )
+        
+        # Store round data for decision submission
+        # This ensures the decision endpoint knows which ticker was selected
+        event = result["event"]
+        villain_take = result.get("villain_take", {})
+        
+        game_session[f"round_{round_number}_data"] = {
+            "ticker": event["ticker"],  # DYNAMIC: Ticker selected from user's portfolio
+            "event_data": {
+                "type": event["type"],
+                "description": event["description"],
+                "horizon": event["horizon"],
+                "villain_stance": villain_take.get("stance", "Bullish"),
+                "villain_bias": villain_take.get("bias", "Unknown"),
+                "villain_hot_take": villain_take.get("text", "")
+            }
+        }
+        
+        # Log round completion to Opik
+        try:
+            log_game_event("round_completed", {
+                "game_id": game_id,
+                "round_number": round_number,
+                "event_ticker": event["ticker"],  # DYNAMIC: User's ticker
+                "event_type": event["type"],
+                "supabase_enabled": SUPABASE_AVAILABLE
+            })
+        except Exception as e:
+            print(f"Warning: Failed to log round completion to Opik: {e}")
         
         return {
             "success": True,
             "round": result
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -230,23 +370,70 @@ async def submit_decision(request: SubmitDecisionRequest):
     Submit player decision
     
     Invokes multi-agent graph to:
-    1. Calculate outcome using historical replay (Price Agent)
-    2. Track behavioral patterns (Insight Agent)
+    1. Update portfolio in Supabase (UpdatePortfolioHandler)
+    2. Calculate outcome using historical replay (Price Agent)
+    3. Store round outcome to Supabase (game_rounds table)
+    4. Track behavioral patterns (Insight Agent)
+    
+    Uses DYNAMIC ticker from the round event (user's actual portfolio).
     """
     try:
+        # Validate game session exists
+        if request.game_id not in game_sessions_store:
+            raise HTTPException(status_code=404, detail=f"Game {request.game_id} not found")
+        
+        game_session = game_sessions_store[request.game_id]
+        
+        # Get DYNAMIC round data (ticker selected from user's portfolio)
+        round_data = game_session.get(f"round_{request.round_number}_data", {})
+        ticker = round_data.get("ticker")
+        event_data = round_data.get("event_data")
+        
+        if not ticker:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Round {request.round_number} data not found. Start the round first."
+            )
+        
+        # Get current price for the DYNAMIC ticker
+        from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+        try:
+            current_price = await get_current_price(ticker)
+        except Exception as e:
+            print(f"Warning: Failed to fetch price for {ticker}: {e}")
+            # Use a fallback price (should rarely happen)
+            current_price = 100.0
+        
+        # Submit decision with DYNAMIC ticker and all required data
         result = await submit_decision_handler.execute(
             game_id=request.game_id,
             round_number=request.round_number,
             player_decision=request.player_decision,
             decision_time=request.decision_time,
-            opened_data_tab=request.opened_data_tab
+            opened_data_tab=request.opened_data_tab,
+            portfolio_id=game_session["portfolio_id"],  # For Supabase updates
+            ticker=ticker,                              # DYNAMIC: User's ticker
+            new_price=current_price,                    # Current market price
+            event_data=event_data                       # Event context for storage
         )
+        
+        # Update game session cache with new portfolio values
+        if result.get("portfolio"):
+            game_session["portfolio_value"] = result["portfolio"]["new_total_value"]
+            
+            # Update DYNAMIC portfolio allocations
+            game_session["portfolio"] = {
+                pos["ticker"]: pos["allocation"] 
+                for pos in result["portfolio"]["positions"]
+            }
         
         return {
             "success": True,
             "outcome": result
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -316,10 +503,66 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                 # Start new round
                 round_number = data.get("round_number", 1)
                 
+                # Fetch game session data
+                if game_id not in game_sessions_store:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Game {game_id} not found"
+                    })
+                    continue
+                
+                game_session = game_sessions_store[game_id]
+                
+                # Log round start to Opik
+                try:
+                    from backend.infrastructure.observability.opik_tracer import log_game_event
+                    log_game_event("round_start", {
+                        "game_id": game_id,
+                        "round_number": round_number,
+                        "portfolio": game_session["portfolio"],
+                        "portfolio_value": game_session["portfolio_value"],
+                        "supabase_enabled": SUPABASE_AVAILABLE,
+                        "via": "websocket"
+                    })
+                except Exception as e:
+                    print(f"Warning: Failed to log round start to Opik: {e}")
+                
+                # Execute round with DYNAMIC portfolio
                 round_result = await start_round_handler.execute(
                     game_id=game_id,
-                    round_number=round_number
+                    round_number=round_number,
+                    portfolio=game_session["portfolio"],
+                    portfolio_value=game_session["portfolio_value"]
                 )
+                
+                # Store round data for decision submission
+                event = round_result["event"]
+                villain_take = round_result.get("villain_take", {})
+                
+                game_session[f"round_{round_number}_data"] = {
+                    "ticker": event["ticker"],  # DYNAMIC: Ticker from user's portfolio
+                    "event_data": {
+                        "type": event["type"],
+                        "description": event["description"],
+                        "horizon": event["horizon"],
+                        "villain_stance": villain_take.get("stance", "Bullish"),
+                        "villain_bias": villain_take.get("bias", "Unknown"),
+                        "villain_hot_take": villain_take.get("text", "")
+                    }
+                }
+                
+                # Log round completion to Opik
+                try:
+                    log_game_event("round_completed", {
+                        "game_id": game_id,
+                        "round_number": round_number,
+                        "event_ticker": event["ticker"],
+                        "event_type": event["type"],
+                        "supabase_enabled": SUPABASE_AVAILABLE,
+                        "via": "websocket"
+                    })
+                except Exception as e:
+                    print(f"Warning: Failed to log round completion to Opik: {e}")
                 
                 await websocket.send_json({
                     "type": "round_started",
@@ -328,13 +571,59 @@ async def game_websocket(websocket: WebSocket, game_id: str):
             
             elif message_type == "submit_decision":
                 # Submit decision and get outcome
+                # Fetch game session and round data
+                if game_id not in game_sessions_store:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Game {game_id} not found"
+                    })
+                    continue
+                
+                game_session = game_sessions_store[game_id]
+                round_number = data.get("round_number", 1)
+                
+                # Get DYNAMIC round data (ticker from user's portfolio)
+                round_data = game_session.get(f"round_{round_number}_data", {})
+                ticker = round_data.get("ticker")
+                event_data = round_data.get("event_data")
+                
+                if not ticker:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Round {round_number} data not found. Start the round first."
+                    })
+                    continue
+                
+                # Get current price for the DYNAMIC ticker
+                from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+                try:
+                    current_price = await get_current_price(ticker)
+                except Exception as e:
+                    print(f"Warning: Failed to fetch price for {ticker}: {e}")
+                    current_price = 100.0
+                
+                # Submit decision with all required parameters
                 decision_result = await submit_decision_handler.execute(
                     game_id=game_id,
-                    round_number=data.get("round_number", 1),
+                    round_number=round_number,
                     player_decision=data.get("decision"),
                     decision_time=data.get("decision_time", 0),
-                    opened_data_tab=data.get("opened_data_tab", False)
+                    opened_data_tab=data.get("opened_data_tab", False),
+                    portfolio_id=game_session["portfolio_id"],  # For Supabase updates
+                    ticker=ticker,                              # DYNAMIC: User's ticker
+                    new_price=current_price,                    # Current market price
+                    event_data=event_data                       # Event context for storage
                 )
+                
+                # Update game session cache with new portfolio values
+                if decision_result.get("portfolio"):
+                    game_session["portfolio_value"] = decision_result["portfolio"]["new_total_value"]
+                    
+                    # Update DYNAMIC portfolio allocations
+                    game_session["portfolio"] = {
+                        pos["ticker"]: pos["allocation"] 
+                        for pos in decision_result["portfolio"]["positions"]
+                    }
                 
                 await websocket.send_json({
                     "type": "outcome",

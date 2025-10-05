@@ -14,6 +14,10 @@ from .price_agent import price_agent
 from .villain_agent import villain_agent
 from .insight_agent import insight_agent
 
+# Note: All agents are now direct async functions (not ReAct agents)
+# Each agent makes at most 1 Gemini API call
+# Total: ~4 API calls per round (Event, Villain, Insight, + 0 supervisor overhead)
+
 
 # Define Game State
 class GameState(TypedDict):

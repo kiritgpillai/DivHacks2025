@@ -14,9 +14,10 @@ class CreatePortfolioHandler:
     Validates tickers, fetches current prices, and creates portfolio aggregate.
     """
     
-    def __init__(self):
-        # In production, inject repository dependency
-        self.portfolio_repo = None  # TODO: inject SupabasePortfolioRepository
+    def __init__(self, supabase_client=None):
+        # Supabase client for database operations
+        self.supabase = supabase_client
+        self.portfolio_repo = None  # TODO: remove after full Supabase migration
     
     async def execute(
         self,
@@ -60,7 +61,11 @@ class CreatePortfolioHandler:
         # Calculate total value
         total_value = portfolio.calculate_total_value()
         
-        # Save to repository (TODO: implement persistence)
+        # Save to Supabase
+        if self.supabase:
+            await self._save_to_supabase(portfolio)
+        
+        # Save to repository (legacy, TODO: remove)
         if self.portfolio_repo:
             await self.portfolio_repo.save(portfolio)
         
@@ -80,4 +85,33 @@ class CreatePortfolioHandler:
             "cash": portfolio.cash,
             "total_value": total_value
         }
+    
+    async def _save_to_supabase(self, portfolio: Portfolio) -> None:
+        """
+        Save portfolio and positions to Supabase.
+        
+        Args:
+            portfolio: Portfolio aggregate to save
+        """
+        # Insert portfolio record
+        self.supabase.table("portfolios").insert({
+            "id": portfolio.id,
+            "player_id": portfolio.player_id,
+            "risk_profile": str(portfolio.risk_profile.value),
+            "tickers": [p.ticker for p in portfolio.positions],
+            "allocations": {p.ticker: float(p.allocation) for p in portfolio.positions},
+            "cash": float(portfolio.cash),
+            "total_value": float(portfolio.calculate_total_value())
+        }).execute()
+        
+        # Insert positions
+        for position in portfolio.positions:
+            self.supabase.table("positions").insert({
+                "portfolio_id": portfolio.id,
+                "ticker": position.ticker,
+                "shares": float(position.shares),
+                "entry_price": float(position.entry_price),
+                "current_price": float(position.current_price),
+                "allocation": float(position.allocation)
+            }).execute()
 

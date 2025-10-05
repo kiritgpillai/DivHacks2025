@@ -39,7 +39,7 @@ Provide neutral, educational coaching. Analyze player behavior, classify profile
 - Risk-adjusted returns
 
 **Example Coaching**:
-- "In downgrade scenarios, your 'Sell Half' strategy outperformed 'Sell All' historically—consider partial de-risking vs full exits."
+- "In [EVENT_TYPE] scenarios, your '[DECISION]' strategy outperformed '[ALTERNATIVE]' historically—consider [STRATEGY] vs [ALTERNATIVE]."
 - "You resisted the Villain effectively. Keep using the Data tab to validate your decisions."
 
 ### Emotional Profile 😰
@@ -57,8 +57,8 @@ Provide neutral, educational coaching. Analyze player behavior, classify profile
 - Follow evidence over instinct
 
 **Example Coaching**:
-- "You followed the Villain 4 times when headlines strongly disagreed (>70% contradiction). Use the Data tab to fact-check emotional takes."
-- "You panic-sold after 3 down days twice. Historical data shows these often recover—consider 'Sell Half' to reduce risk while staying exposed."
+- "You followed the Villain [X] times when headlines strongly disagreed (>[X]% contradiction). Use the Data tab to fact-check emotional takes."
+- "You panic-sold after [X] down days [X] times. Historical data shows these often recover—consider '[DECISION]' to reduce risk while staying exposed."
 
 ### Conservative Profile 🛡️
 **Characteristics**:
@@ -75,8 +75,8 @@ Provide neutral, educational coaching. Analyze player behavior, classify profile
 - Confidence building
 
 **Example Coaching**:
-- "You trimmed positions early 5 times. While this limited downside, you missed median 8-12% upside on earnings beats. Consider 'Hold' on strong signals."
-- "Your max drawdown was only 2%, but returns were 3% vs 12% potential. Evaluate if you're being too conservative on high-conviction plays."
+- "You trimmed positions early [X] times. While this limited downside, you missed median [X]% upside on [EVENT_TYPE]. Consider '[DECISION]' on strong signals."
+- "Your max drawdown was only [X]%, but returns were [X]% vs [X]% potential. Evaluate if you're being too conservative on high-conviction plays."
 
 ## Profile Classification Logic (Rule-Based)
 
@@ -145,13 +145,13 @@ Tips should be:
 ### Good Examples ✅
 
 **Earnings Pattern**:
-"Earnings gaps with high beta and rising vol often mean-revert within 3 days—consider trimming instead of exiting fully."
+"[EVENT_TYPE] gaps with high beta and rising vol often mean-revert within [X] days—consider trimming instead of exiting fully."
 
 **Volatility Spike**:
-"High volatility (>40% 30-day) suggests uncertainty—historical outcomes show 'Sell Half' captured 70% of 'Hold' upside with 50% of risk."
+"High volatility (>[X]% [X]-day) suggests uncertainty—historical outcomes show '[DECISION]' captured [X]% of '[ALTERNATIVE]' upside with [X]% of risk."
 
 **Analyst Action**:
-"Analyst upgrades historically produce 3-5% average moves over 5 days—median returns favor 'Hold' over 'Buy' at these levels."
+"[EVENT_TYPE] historically produce [X]% average moves over [X] days—median returns favor '[DECISION]' over '[ALTERNATIVE]' at these levels."
 
 ### Bad Examples ❌
 
@@ -169,21 +169,21 @@ Return 2-4 specific, personalized tips:
   "profile": "Rational",
   "overall": "Strong data-driven approach with room for optimization.",
   "coaching": [
-    "In downgrade scenarios, 'Sell Half' outperformed 'Sell All' by 4% median—consider partial vs full exits.",
-    "You chased NVDA after 3 up days—wait for consolidation on parabolic moves.",
-    "Your Data tab usage (85%) and Villain resistance are strengths—keep it up!"
+    "In [EVENT_TYPE] scenarios, '[DECISION]' outperformed '[ALTERNATIVE]' by [X]% median—consider partial vs full exits.",
+    "You chased [TICKER] after [X] up days—wait for consolidation on parabolic moves.",
+    "Your Data tab usage ([X]%) and Villain resistance are strengths—keep it up!"
   ],
   "best_trade": {
-    "ticker": "MSFT",
-    "decision": "HOLD",
-    "pl_percent": 8.2,
-    "insight": "Held after analyst upgrade with strong fundamentals—captured full upside."
+    "ticker": "[TICKER]",
+    "decision": "[DECISION]",
+    "pl_percent": [X.X],
+    "insight": "[ACTION] after [EVENT_TYPE] with strong fundamentals—captured full upside."
   },
   "worst_trade": {
-    "ticker": "AAPL",
-    "decision": "SELL_ALL",
-    "opportunity_cost": -3.5,
-    "insight": "Exited before recovery—'Sell Half' would have limited downside while staying exposed."
+    "ticker": "[TICKER]",
+    "decision": "[DECISION]",
+    "opportunity_cost": -[X.X],
+    "insight": "Exited before recovery—'[ALTERNATIVE]' would have limited downside while staying exposed."
   }
 }
 ```
@@ -192,24 +192,24 @@ Return 2-4 specific, personalized tips:
 
 ### During Round (Neutral Tip)
 ```
-1. Think: Player needs educational tip for EARNINGS_BEAT event
-2. Observe: Price pattern = "gap_up", Volatility = "high"
-3. Act: write_neutral_tip("EARNINGS_BEAT", "gap_up", "high")
+1. Think: Player needs educational tip for [EVENT_TYPE] event
+2. Observe: Price pattern = "[PATTERN]", Volatility = "[LEVEL]"
+3. Act: write_neutral_tip("[EVENT_TYPE]", "[PATTERN]", "[LEVEL]")
 4. Observe: Generated tip
 5. Final Answer: Return neutral educational tip
 ```
 
 ### Final Report (Profiling)
 ```
-1. Think: Aggregate all 7 decisions
+1. Think: Aggregate all [X] decisions
 2. Act: aggregate_behavior(all_logs)
-3. Observe: Metrics (data_tab: 85%, consensus: 71%, panic: 0, chased: 1)
+3. Observe: Metrics (data_tab: [X]%, consensus: [X]%, panic: [X], chased: [X])
 4. Think: Classify profile based on metrics
 5. Act: classify_profile(metrics)
-6. Observe: "Rational"
+6. Observe: "[PROFILE]"
 7. Think: Generate personalized coaching
-8. Act: generate_coaching(logs, "Rational")
-9. Observe: 3 coaching tips
+8. Act: generate_coaching(logs, "[PROFILE]")
+9. Observe: [X] coaching tips
 10. Final Answer: Return complete behavioral report
 ```
 

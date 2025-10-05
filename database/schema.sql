@@ -4,7 +4,7 @@
 -- Portfolios table
 CREATE TABLE IF NOT EXISTS portfolios (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    player_id UUID NOT NULL,
+    player_id TEXT NOT NULL,
     risk_profile TEXT NOT NULL CHECK (risk_profile IN ('Risk-On', 'Balanced', 'Risk-Off')),
     tickers TEXT[] NOT NULL,
     allocations JSONB NOT NULL,
@@ -14,9 +14,23 @@ CREATE TABLE IF NOT EXISTS portfolios (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Positions table (individual stock positions within portfolios)
+CREATE TABLE IF NOT EXISTS positions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    portfolio_id UUID NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+    ticker TEXT NOT NULL,
+    shares DECIMAL NOT NULL CHECK (shares >= 0),
+    entry_price DECIMAL NOT NULL CHECK (entry_price > 0),
+    current_price DECIMAL NOT NULL CHECK (current_price > 0),
+    allocation DECIMAL NOT NULL CHECK (allocation >= 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (portfolio_id, ticker)
+);
+
 -- Game sessions table
 CREATE TABLE IF NOT EXISTS game_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY,
     portfolio_id UUID NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
     current_round INT DEFAULT 0 CHECK (current_round >= 0 AND current_round <= 3),
     portfolio_value DECIMAL NOT NULL,
@@ -28,7 +42,7 @@ CREATE TABLE IF NOT EXISTS game_sessions (
 -- Game rounds table
 CREATE TABLE IF NOT EXISTS game_rounds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
     round_number INT NOT NULL CHECK (round_number >= 1 AND round_number <= 3),
     
     -- Event data
@@ -99,7 +113,7 @@ CREATE TABLE IF NOT EXISTS historical_cases (
 -- Behavioral profiles table (aggregate player stats)
 CREATE TABLE IF NOT EXISTS behavioral_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    game_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
+    game_id TEXT NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
     
     -- Profile classification
     profile TEXT NOT NULL CHECK (profile IN ('Rational', 'Emotional', 'Conservative', 'Balanced')),
@@ -123,6 +137,8 @@ CREATE TABLE IF NOT EXISTS behavioral_profiles (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_portfolios_player ON portfolios(player_id);
 CREATE INDEX IF NOT EXISTS idx_portfolios_created ON portfolios(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_positions_portfolio ON positions(portfolio_id);
+CREATE INDEX IF NOT EXISTS idx_positions_ticker ON positions(ticker);
 CREATE INDEX IF NOT EXISTS idx_game_portfolio ON game_sessions(portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_games_completed ON game_sessions(completed_at DESC) WHERE completed_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_rounds_ticker ON game_rounds(ticker);
@@ -136,6 +152,7 @@ CREATE INDEX IF NOT EXISTS idx_profile_game ON behavioral_profiles(game_id);
 
 -- Enable Row Level Security (RLS) for multi-tenancy
 ALTER TABLE portfolios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE decision_tracker ENABLE ROW LEVEL SECURITY;
@@ -143,6 +160,7 @@ ALTER TABLE behavioral_profiles ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (allow all for MVP, tighten in production)
 CREATE POLICY "Enable all operations for all users" ON portfolios FOR ALL USING (true);
+CREATE POLICY "Enable all operations for all users" ON positions FOR ALL USING (true);
 CREATE POLICY "Enable all operations for all users" ON game_sessions FOR ALL USING (true);
 CREATE POLICY "Enable all operations for all users" ON game_rounds FOR ALL USING (true);
 CREATE POLICY "Enable all operations for all users" ON decision_tracker FOR ALL USING (true);
@@ -165,8 +183,14 @@ CREATE TRIGGER update_portfolios_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_positions_updated_at
+    BEFORE UPDATE ON positions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Comments for documentation
 COMMENT ON TABLE portfolios IS 'Player portfolios with stock allocations';
+COMMENT ON TABLE positions IS 'Individual stock positions within portfolios (shares, prices, allocations)';
 COMMENT ON TABLE game_sessions IS 'Game sessions linking portfolios to rounds';
 COMMENT ON TABLE game_rounds IS 'Individual rounds with events, decisions, and outcomes';
 COMMENT ON TABLE decision_tracker IS 'Behavioral analysis data for each round';

@@ -1,10 +1,5 @@
-"""
-Central LLM Configuration for Market Mayhem
-All model names and LLM settings are defined here.
-"""
-
 # Gemini Model Configuration
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-2.0-flash-001"
 
 # Temperature settings for different agent types
 TEMPERATURE_EVENT_GENERATOR = 0.7  # Creative for event generation

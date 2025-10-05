@@ -1,22 +1,30 @@
 """Submit Decision Use Case Handler"""
 
 from typing import Dict
-from backend.infrastructure.agents.game_graph import process_decision
+from backend.application.portfolio.update_portfolio_handler import UpdatePortfolioHandler
+from backend.infrastructure.observability.opik_tracer import log_game_event
 
 
 class SubmitDecisionHandler:
     """
     Handler for submitting player decision.
     
-    Invokes multi-agent graph to:
-    1. Calculate outcome using historical replay (Price Agent)
-    2. Track behavioral patterns (Insight Agent)
+    Process:
+    1. Update portfolio in Supabase (UpdatePortfolioHandler)
+    2. Calculate P/L based on actual price changes
+    3. Store round outcome to Supabase (game_rounds table)
+    4. Log to Opik for observability
+    
+    Note: No longer uses agent graph for decision processing.
+    Portfolio updates are handled directly via Supabase.
     """
     
-    def __init__(self):
-        # In production, inject repository dependencies
-        self.game_repo = None  # TODO: inject SupabaseGameRepository
-        self.decision_tracker_repo = None  # TODO: inject SupabaseDecisionTrackerRepository
+    def __init__(self, supabase_client=None):
+        # Supabase client for database operations
+        self.supabase = supabase_client
+        self.update_portfolio_handler = UpdatePortfolioHandler(supabase_client)
+        self.game_repo = None  # TODO: remove after full Supabase migration
+        self.decision_tracker_repo = None  # TODO: remove after full Supabase migration
     
     async def execute(
         self,
@@ -24,7 +32,11 @@ class SubmitDecisionHandler:
         round_number: int,
         player_decision: str,
         decision_time: float,
-        opened_data_tab: bool
+        opened_data_tab: bool,
+        portfolio_id: str = None,
+        ticker: str = None,
+        new_price: float = None,
+        event_data: Dict = None
     ) -> Dict:
         """
         Process player decision and calculate outcome.
@@ -35,60 +47,139 @@ class SubmitDecisionHandler:
             player_decision: SELL_ALL, SELL_HALF, HOLD, or BUY
             decision_time: Time taken to decide (seconds)
             opened_data_tab: Whether player opened data tab
+            portfolio_id: Portfolio ID (required for portfolio updates)
+            ticker: Stock ticker for the decision (required)
+            new_price: Current price for the ticker (required)
+            event_data: Event data from round start (for storing in game_rounds)
             
         Returns:
-            Dict with outcome, P/L, and behavior tracking
+            Dict with outcome, P/L, updated portfolio, and behavior tracking
         """
-        # Fetch round data (historical case, position size, etc.)
-        # round_data = await self.game_repo.get_round(game_id, round_number)
+        # Validate required parameters
+        if not ticker or new_price is None:
+            raise ValueError("ticker and new_price are required for portfolio updates")
         
-        # For MVP, use mock data
-        historical_case = {
-            "ticker": "AAPL",
-            "event_type": "EARNINGS_BEAT",
-            "date": "2023-05-15",
-            "horizon": 3,
-            "day0_price": 175.0,
-            "day_h_price": 182.5,
-            "price_path": [175.0, 178.2, 180.1, 182.5],
-            "return_pct": 0.0428
-        }
-        position_size = 300000
+        # Step 1: Update portfolio if portfolio_id provided
+        portfolio_update = None
+        if portfolio_id:
+            try:
+                portfolio_update = await self.update_portfolio_handler.execute(
+                    portfolio_id=portfolio_id,
+                    ticker=ticker,
+                    decision=player_decision,
+                    new_price=new_price,
+                    game_id=game_id,
+                    round_number=round_number
+                )
+            except Exception as e:
+                print(f"Warning: Portfolio update failed: {e}")
+                # Continue with mock P/L calculation
         
-        # Invoke multi-agent graph
-        result = await process_decision(
-            game_id=game_id,
-            round_number=round_number,
-            player_decision=player_decision,
-            decision_time=decision_time,
-            opened_data_tab=opened_data_tab,
-            historical_case=historical_case,
-            position_size=position_size
-        )
+        # Step 2: Get P/L from portfolio update
+        # We no longer need to invoke the agent graph for decision processing
+        # Portfolio update handler already calculated P/L based on actual price changes
+        if portfolio_update:
+            pl_dollars = portfolio_update["pl_dollars"]
+            pl_percent = portfolio_update["pl_percent"]
+        else:
+            # Fallback: If portfolio update failed, use mock calculation
+            # This should rarely happen in production
+            print("Warning: Using mock P/L calculation (portfolio update unavailable)")
+            pl_dollars = 0.0
+            pl_percent = 0.0
         
-        # Update game session portfolio value (TODO: implement)
-        # new_portfolio_value = old_value + result['pl_dollars']
-        # await self.game_repo.update_portfolio_value(game_id, new_portfolio_value)
+        # Step 3: Store round outcome to Supabase
+        if self.supabase and event_data:
+            try:
+                await self._save_round_outcome(
+                    game_id=game_id,
+                    round_number=round_number,
+                    ticker=ticker,
+                    event_data=event_data,
+                    player_decision=player_decision,
+                    decision_time=decision_time,
+                    opened_data_tab=opened_data_tab,
+                    pl_dollars=pl_dollars,
+                    pl_percent=pl_percent
+                )
+            except Exception as e:
+                print(f"Warning: Failed to save round outcome: {e}")
         
-        # Save decision log (TODO: implement persistence)
-        decision_log = {
-            "game_id": game_id,
-            "round_number": round_number,
-            "player_decision": player_decision,
-            "decision_time": decision_time,
-            "opened_data_tab": opened_data_tab,
-            "pl_dollars": result["pl_dollars"],
-            "pl_percent": result["pl_percent"],
-            "behavior_flags": result.get("behavior_flags", [])
-        }
-        # await self.decision_tracker_repo.save(decision_log)
+        # Step 4: Log to Opik
+        try:
+            log_game_event("decision_submitted", {
+                "game_id": game_id,
+                "round_number": round_number,
+                "portfolio_id": portfolio_id,
+                "ticker": ticker,
+                "decision": player_decision,
+                "decision_time": decision_time,
+                "opened_data_tab": opened_data_tab,
+                "pl_dollars": pl_dollars,
+                "pl_percent": pl_percent,
+                "new_total_value": portfolio_update["new_total_value"] if portfolio_update else None
+            })
+        except Exception as e:
+            print(f"Warning: Failed to log to Opik: {e}")
         
         return {
             "game_id": game_id,
             "round_number": round_number,
-            "outcome": result["outcome"],
-            "pl_dollars": result["pl_dollars"],
-            "pl_percent": result["pl_percent"],
-            "behavior_flags": result.get("behavior_flags", [])
+            "outcome": "success",  # Simple outcome status
+            "pl_dollars": pl_dollars,
+            "pl_percent": pl_percent,
+            "portfolio": portfolio_update,
+            "behavior_flags": []  # TODO: Add behavioral analysis if needed
         }
+    
+    async def _save_round_outcome(
+        self,
+        game_id: str,
+        round_number: int,
+        ticker: str,
+        event_data: Dict,
+        player_decision: str,
+        decision_time: float,
+        opened_data_tab: bool,
+        pl_dollars: float,
+        pl_percent: float
+    ) -> None:
+        """
+        Save round outcome to game_rounds table.
+        
+        Args:
+            game_id: Game session ID
+            round_number: Round number
+            ticker: Stock ticker
+            event_data: Event data from round start
+            player_decision: Player's decision
+            decision_time: Time taken to decide
+            opened_data_tab: Whether player opened data tab
+            pl_dollars: Profit/loss in dollars
+            pl_percent: Profit/loss percentage
+        """
+        # Fetch session_id from game_sessions
+        session_response = self.supabase.table("game_sessions").select("id").eq("id", game_id).execute()
+        
+        if not session_response.data or len(session_response.data) == 0:
+            print(f"Warning: Game session {game_id} not found, skipping round outcome save")
+            return
+        
+        # Insert round outcome
+        self.supabase.table("game_rounds").insert({
+            "session_id": game_id,
+            "round_number": round_number,
+            "ticker": ticker,
+            "event_type": event_data.get("type", "UNKNOWN"),
+            "event_description": event_data.get("description", ""),
+            "event_horizon": event_data.get("horizon", 3),
+            "villain_stance": event_data.get("villain_stance", "Bullish"),
+            "villain_bias": event_data.get("villain_bias", "Unknown"),
+            "villain_hot_take": event_data.get("villain_hot_take", ""),
+            "player_decision": player_decision,
+            "decision_time": decision_time,
+            "opened_data_tab": opened_data_tab,
+            "pl_dollars": pl_dollars,
+            "pl_percent": pl_percent
+        }).execute()
 

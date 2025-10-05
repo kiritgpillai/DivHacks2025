@@ -1,6 +1,6 @@
 """Start Round Use Case Handler"""
 
-from typing import Dict
+from typing import Dict, Optional
 from backend.infrastructure.agents.game_graph import start_round
 
 
@@ -21,35 +21,50 @@ class StartRoundHandler:
         self.game_repo = None  # TODO: inject SupabaseGameRepository
         self.portfolio_repo = None  # TODO: inject SupabasePortfolioRepository
     
-    async def execute(self, game_id: str, round_number: int) -> Dict:
+    async def execute(
+        self, 
+        game_id: str, 
+        round_number: int,
+        portfolio: Dict[str, float] = None,
+        portfolio_value: float = None
+    ) -> Dict:
         """
         Start a new round.
         
         Args:
             game_id: Game session ID
             round_number: Round number (1-3)
+            portfolio: Portfolio positions {ticker: allocation_dollars} - REQUIRED, must be user's actual portfolio
+            portfolio_value: Total portfolio value - REQUIRED, must be user's actual value
             
         Returns:
             Dict with event, villain take, and data tab
+            
+        Raises:
+            ValueError: If portfolio or portfolio_value not provided
         """
-        # Fetch game session and portfolio (TODO: implement)
-        # game_session = await self.game_repo.get(game_id)
-        # portfolio = await self.portfolio_repo.get(game_session['portfolio_id'])
+        # IMPORTANT: Portfolio MUST be provided - no hardcoded fallback
+        # This ensures events are always generated for the user's actual tickers
+        if not portfolio or portfolio_value is None:
+            raise ValueError(
+                "Portfolio data is required. Cannot start round without user's portfolio. "
+                "This is a critical error - portfolio should be passed from game session."
+            )
         
-        # For MVP, use mock data
-        portfolio_data = {
-            "AAPL": 300000,
-            "TSLA": 400000,
-            "MSFT": 300000
-        }
-        portfolio_value = 1_000_000
+        # Validate portfolio is not empty
+        if not portfolio or len(portfolio) == 0:
+            raise ValueError("Portfolio cannot be empty. User must have at least one position.")
         
-        # Invoke multi-agent graph
+        # Use DYNAMIC portfolio data (user's actual tickers and allocations)
+        portfolio_data = portfolio
+        
+        # Invoke multi-agent graph with DYNAMIC portfolio
+        # Event Generator will select a ticker from this portfolio
         result = await start_round(
             game_id=game_id,
-            portfolio_id="mock_portfolio_id",
+            portfolio_id="mock_portfolio_id",  # TODO: pass actual portfolio_id
             round_number=round_number,
-            portfolio=portfolio_data,
+            portfolio=portfolio_data,  # DYNAMIC: User's actual tickers
             portfolio_value=portfolio_value
         )
         
