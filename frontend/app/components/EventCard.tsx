@@ -24,7 +24,7 @@ export default function EventCard({ event }: EventCardProps) {
         </div>
         <div className="flex-1">
           <h2 className="text-2xl font-bold text-white">{event.ticker}</h2>
-          <p className="text-sm text-gray-400">{event.type.replace(/_/g, ' ')}</p>
+          <p className="text-sm text-gray-400">{String(event.type ?? '').replace(/_/g, ' ') || '—'}</p>
         </div>
         <div className="flex items-center gap-2 bg-gray-700 px-3 py-1 rounded-full">
           <Clock className="w-4 h-4 text-gray-400" />

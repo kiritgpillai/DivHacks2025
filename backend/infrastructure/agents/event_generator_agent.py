@@ -33,4 +33,3 @@ event_generator_agent = create_react_agent(
     prompt=EVENT_GENERATOR_PROMPT,
     name="event_generator"
 )
-
