@@ -107,20 +107,23 @@ export default function PortfolioBuilderPage() {
   }
 
   return (
-    <div className="min-h-screen p-8">
+    <div className="min-h-screen p-8" style={{ backgroundColor: '#1B2A1B' }}>
       <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          {/* Header */}
-          <h1 className="text-4xl font-bold text-white mb-2">Build Your Portfolio</h1>
-          <p className="text-gray-400 mb-8">
-            Select stocks and allocate your $1,000,000 budget
-          </p>
+          {/* Header Image */}
+          <div className="text-center mb-8">
+            <img 
+              src="/HeadingPortfolio.png" 
+              alt="Build Your Portfolio"
+              className="max-w-2xl w-full h-auto mx-auto"
+            />
+          </div>
 
           {/* Risk Profile Selector */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#4A3728', border: '1px solid #5D4037' }}>
             <label className="block text-sm font-medium text-gray-300 mb-3">
               Risk Profile
             </label>
@@ -132,8 +135,12 @@ export default function PortfolioBuilderPage() {
                   className={`p-4 rounded-lg border-2 transition-all ${
                     riskProfile === profile
                       ? 'border-primary-500 bg-primary-900 bg-opacity-30'
-                      : 'border-gray-600 bg-gray-700 hover:border-gray-500'
+                      : 'hover:opacity-80'
                   }`}
+                  style={{
+                    backgroundColor: riskProfile === profile ? undefined : '#5D4037',
+                    borderColor: riskProfile === profile ? undefined : '#6D4C41'
+                  }}
                 >
                   <div className="text-white font-semibold mb-1">{profile}</div>
                   <div className="text-xs text-gray-400">
@@ -147,7 +154,7 @@ export default function PortfolioBuilderPage() {
           </div>
 
           {/* Ticker Selector */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#4A3728', border: '1px solid #5D4037' }}>
             <label className="block text-sm font-medium text-gray-300 mb-3">
               Available Tickers
             </label>
@@ -159,9 +166,13 @@ export default function PortfolioBuilderPage() {
                   disabled={!!selectedTickers.find(t => t.ticker === ticker)}
                   className={`px-4 py-2 rounded-md font-medium transition-all ${
                     selectedTickers.find(t => t.ticker === ticker)
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      ? 'cursor-not-allowed'
                       : 'bg-primary-600 hover:bg-primary-700 text-white'
                   }`}
+                  style={{
+                    backgroundColor: selectedTickers.find(t => t.ticker === ticker) ? '#5D4037' : undefined,
+                    color: selectedTickers.find(t => t.ticker === ticker) ? '#A1887F' : undefined
+                  }}
                 >
                   {ticker}
                 </button>
@@ -170,7 +181,7 @@ export default function PortfolioBuilderPage() {
           </div>
 
           {/* Selected Tickers & Allocations */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#4A3728', border: '1px solid #5D4037' }}>
             <label className="block text-sm font-medium text-gray-300 mb-3">
               Your Portfolio ({selectedTickers.length} stocks)
             </label>
@@ -204,7 +215,8 @@ export default function PortfolioBuilderPage() {
                       type="number"
                       value={allocation}
                       onChange={(e) => updateAllocation(ticker, parseInt(e.target.value) || 0)}
-                      className="w-32 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white"
+                      className="w-32 px-3 py-2 rounded text-white"
+                      style={{ backgroundColor: '#5D4037', border: '1px solid #6D4C41' }}
                     />
                     
                     <div className="w-16 text-right text-gray-400">
@@ -217,13 +229,19 @@ export default function PortfolioBuilderPage() {
           </div>
 
           {/* Budget Summary */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#4A3728', border: '1px solid #5D4037' }}>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-300">Total Allocated:</span>
+              <div className="flex items-center gap-2">
+                <img src="/coin.png" alt="Coin icon" className="w-5 h-5" />
+                <span className="text-gray-300">Total Allocated:</span>
+              </div>
               <span className="text-white font-bold">${totalAllocated.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-300">Remaining:</span>
+              <div className="flex items-center gap-2">
+                <img src="/coin.png" alt="Coin icon" className="w-5 h-5" />
+                <span className="text-gray-300">Remaining:</span>
+              </div>
               <span className={`font-bold ${remaining > 1000 ? 'text-yellow-400' : remaining < -1 ? 'text-red-400' : 'text-green-400'}`}>
                 ${remaining.toLocaleString()}
               </span>
@@ -244,8 +262,12 @@ export default function PortfolioBuilderPage() {
             className={`w-full py-4 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition-all ${
               isValid && !loading
                 ? 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'cursor-not-allowed'
             }`}
+            style={{
+              backgroundColor: !(isValid && !loading) ? '#5D4037' : undefined,
+              color: !(isValid && !loading) ? '#A1887F' : undefined
+            }}
           >
             {loading ? 'Creating Portfolio...' : 'Start Game'}
             {!loading && <ArrowRight className="w-5 h-5" />}
