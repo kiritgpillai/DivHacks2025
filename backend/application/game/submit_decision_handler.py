@@ -135,9 +135,14 @@ class SubmitDecisionHandler:
         except Exception as e:
             print(f"Warning: Failed P/L computation: {e}")
 
-        # Prefer our per-asset P/L; store percent as percentage units (e.g., 5.25 for 5.25%)
+        # Calculate P/L percentage as pl_dollars / previous_total_portfolio_value
         pl_dollars = float(round_pl_dollars)
-        pl_percent = float(round(round_pl_percent * Decimal("100"), 4))
+        previous_total_value = portfolio_update.get("previous_total_value", 0) if portfolio_update else 0
+        pl_percent = (pl_dollars / previous_total_value) if previous_total_value > 0 else 0.0
+        print(f"DEBUG P/L Calculation:")
+        print(f"  pl_dollars: {pl_dollars}")
+        print(f"  previous_total_value: {previous_total_value}")
+        print(f"  pl_percent: {pl_percent}")
         # Clean near-zero noise
         if abs(pl_dollars) < 1e-9:
             pl_dollars = 0.0
@@ -173,6 +178,7 @@ class SubmitDecisionHandler:
                 "opened_data_tab": opened_data_tab,
                 "pl_dollars": pl_dollars,
                 "pl_percent": pl_percent,
+                "previous_total_value": portfolio_update["previous_total_value"] if portfolio_update else None,
                 "new_total_value": portfolio_update["new_total_value"] if portfolio_update else None
             })
         except Exception as e:
