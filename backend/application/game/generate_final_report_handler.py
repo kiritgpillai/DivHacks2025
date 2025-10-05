@@ -19,10 +19,11 @@ class GenerateFinalReportHandler:
     3. Generate personalized coaching
     """
     
-    def __init__(self):
+    def __init__(self, supabase_client=None):
         # In production, inject repository dependencies
         self.game_repo = None  # TODO: inject SupabaseGameRepository
         self.decision_tracker_repo = None  # TODO: inject SupabaseDecisionTrackerRepository
+        self.supabase = supabase_client
     
     async def execute(self, game_id: str) -> Dict:
         """
@@ -34,39 +35,25 @@ class GenerateFinalReportHandler:
         Returns:
             Dict with profile, coaching, and summary stats
         """
-        # Fetch all decision logs for this game
-        # decision_logs = await self.decision_tracker_repo.get_by_game(game_id)
+        # Fetch all decision logs for this game from database
+        decision_logs = await self._fetch_decision_logs(game_id)
         
-        # For MVP, use mock data
-        decision_logs = [
-            {
-                "round_number": 1,
-                "player_decision": "HOLD",
-                "opened_data_tab": True,
-                "pl_dollars": 12840,
-                "consensus": "Bullish",
-                "contradiction_score": 0.75,
-                "behavior_flags": ["resisted_villain"]
-            },
-            {
-                "round_number": 2,
-                "player_decision": "SELL_ALL",
-                "opened_data_tab": False,
-                "pl_dollars": 0,
-                "consensus": "Neutral",
-                "contradiction_score": 0.5,
-                "behavior_flags": ["panic_sell", "ignored_data"]
-            },
-            {
-                "round_number": 3,
-                "player_decision": "SELL_HALF",
-                "opened_data_tab": True,
-                "pl_dollars": 8500,
-                "consensus": "Bearish",
-                "contradiction_score": 0.2,
-                "behavior_flags": []
+        if not decision_logs:
+            # If no real data, return empty report
+            return {
+                "game_id": game_id,
+                "profile": "No Data",
+                "coaching": ["No decision data available for analysis"],
+                "summary": {
+                    "total_rounds": 0,
+                    "final_portfolio_value": 0,
+                    "total_pl": 0,
+                    "total_return_pct": 0,
+                    "data_tab_usage": 0,
+                    "consensus_alignment": 0
+                },
+                "metrics": {}
             }
-        ]
         
         # Aggregate behavior
         metrics_result = await aggregate_behavior.ainvoke({"decision_logs": json.dumps(decision_logs)})
@@ -85,10 +72,15 @@ class GenerateFinalReportHandler:
         coaching_data = json.loads(coaching_result)
         coaching_tips = coaching_data["coaching"]
         
-        # Calculate summary stats
-        total_pl = sum(log["pl_dollars"] for log in decision_logs)
-        final_portfolio_value = 1_000_000 + total_pl
-        total_return = (total_pl / 1_000_000) * 100
+        # Get the final portfolio value from the most recent portfolio update
+        final_portfolio_value = await self._get_final_portfolio_value(game_id)
+        
+        # Calculate total P/L as the difference between final and initial values
+        initial_investment = 1_000_000  # Default starting amount
+        total_pl = final_portfolio_value - initial_investment
+        
+        # Calculate return percentage based on initial investment
+        total_return = (total_pl / initial_investment) * 100 if initial_investment > 0 else 0
         
         return {
             "game_id": game_id,
@@ -104,4 +96,103 @@ class GenerateFinalReportHandler:
             },
             "metrics": metrics
         }
+    
+    async def _fetch_decision_logs(self, game_id: str) -> List[Dict]:
+        """
+        Fetch decision logs from game_rounds table for the given game.
+        
+        Args:
+            game_id: Game session ID
+            
+        Returns:
+            List of decision log dictionaries
+        """
+        if not self.supabase:
+            print("Warning: Supabase client not configured, cannot fetch decision logs")
+            return []
+        
+        try:
+            # Fetch all rounds for this game session
+            response = self.supabase.table("game_rounds").select("*").eq("session_id", game_id).order("round_number").execute()
+            
+            if not response.data:
+                print(f"No decision logs found for game {game_id}")
+                return []
+            
+            # Convert database records to decision log format expected by insight tools
+            decision_logs = []
+            for record in response.data:
+                # Determine consensus from event data (simplified logic)
+                consensus = "Neutral"
+                if record.get("villain_stance") == "Bullish":
+                    consensus = "Bullish" if record.get("contradiction_score", 0.5) < 0.7 else "Bearish"
+                elif record.get("villain_stance") == "Bearish":
+                    consensus = "Bearish" if record.get("contradiction_score", 0.5) < 0.7 else "Bullish"
+                
+                # Determine behavior flags based on decision patterns
+                behavior_flags = []
+                if record.get("player_decision") == "SELL_ALL" and record.get("opened_data_tab", False) == False:
+                    behavior_flags.append("panic_sell")
+                if not record.get("opened_data_tab", False):
+                    behavior_flags.append("ignored_data")
+                if record.get("contradiction_score", 0) > 0.7:
+                    if record.get("villain_stance") == "Bullish" and record.get("player_decision") in ["HOLD", "BUY"]:
+                        behavior_flags.append("followed_villain_high_contradiction")
+                    elif record.get("villain_stance") == "Bearish" and record.get("player_decision") in ["SELL_ALL", "SELL_HALF"]:
+                        behavior_flags.append("followed_villain_high_contradiction")
+                    else:
+                        behavior_flags.append("resisted_villain")
+                
+                decision_log = {
+                    "round_number": record.get("round_number", 0),
+                    "player_decision": record.get("player_decision", ""),
+                    "opened_data_tab": record.get("opened_data_tab", False),
+                    "pl_dollars": float(record.get("pl_dollars", 0)),
+                    "consensus": consensus,
+                    "contradiction_score": float(record.get("villain_contradiction_score", 0.5)),  # Use a field if it exists
+                    "behavior_flags": behavior_flags
+                }
+                
+                decision_logs.append(decision_log)
+            
+            print(f"Fetched {len(decision_logs)} decision logs for game {game_id}")
+            return decision_logs
+            
+        except Exception as e:
+            print(f"Error fetching decision logs for game {game_id}: {e}")
+            return []
+    
+    async def _get_final_portfolio_value(self, game_id: str) -> float:
+        """
+        Get the final portfolio value for the game.
+        
+        Args:
+            game_id: Game session ID
+            
+        Returns:
+            Final portfolio value
+        """
+        if not self.supabase:
+            return 1_000_000  # Default fallback
+        
+        try:
+            # Get the portfolio_id from the game session
+            session_response = self.supabase.table("game_sessions").select("portfolio_id").eq("id", game_id).execute()
+            
+            if not session_response.data:
+                return 1_000_000  # Default fallback
+            
+            portfolio_id = session_response.data[0]["portfolio_id"]
+            
+            # Get the current portfolio value
+            portfolio_response = self.supabase.table("portfolios").select("total_value").eq("id", portfolio_id).execute()
+            
+            if not portfolio_response.data:
+                return 1_000_000  # Default fallback
+            
+            return float(portfolio_response.data[0]["total_value"])
+            
+        except Exception as e:
+            print(f"Error fetching final portfolio value for game {game_id}: {e}")
+            return 1_000_000  # Default fallback
 

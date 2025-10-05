@@ -100,7 +100,7 @@ create_portfolio_handler = CreatePortfolioHandler(supabase_client=supabase if SU
 start_game_handler = StartGameHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
 start_round_handler = StartRoundHandler()
 submit_decision_handler = SubmitDecisionHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
-generate_final_report_handler = GenerateFinalReportHandler()
+generate_final_report_handler = GenerateFinalReportHandler(supabase_client=supabase if SUPABASE_AVAILABLE else None)
 
 
 # === Request/Response Models ===
