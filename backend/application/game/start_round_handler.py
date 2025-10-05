@@ -1,7 +1,9 @@
 """Start Round Use Case Handler"""
 
 from typing import Dict, Optional
+import asyncio
 from backend.infrastructure.agents.game_graph import start_round
+from backend.infrastructure.agents.price_agent import background_price_agent
 
 
 class StartRoundHandler:
@@ -67,9 +69,6 @@ class StartRoundHandler:
             portfolio=portfolio_data,  # DYNAMIC: User's actual tickers
             portfolio_value=portfolio_value
         )
-        
-        # Save round data (TODO: implement persistence)
-        # await self.game_repo.save_round(game_id, round_number, result)
         
         return {
             "game_id": game_id,

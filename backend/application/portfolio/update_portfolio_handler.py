@@ -12,7 +12,7 @@ class UpdatePortfolioHandler:
     """
     Handler for updating portfolio based on player decisions.
     
-    Applies BUY, SELL_ALL, SELL_HALF, or HOLD decisions to portfolio
+    Applies BUY, SELL_HALF, or HOLD decisions to portfolio
     and persists changes to Supabase.
     """
     
@@ -32,7 +32,8 @@ class UpdatePortfolioHandler:
         decision: str,
         new_price: float,
         game_id: str = None,
-        round_number: int = None
+        round_number: int = None,
+        historical_case: dict = None
     ) -> Dict:
         """
         Update portfolio based on player decision.
@@ -40,7 +41,7 @@ class UpdatePortfolioHandler:
         Args:
             portfolio_id: Portfolio ID
             ticker: Stock ticker
-            decision: SELL_ALL, SELL_HALF, HOLD, or BUY
+            decision: SELL_HALF, HOLD, or BUY
             new_price: Current/new price for the ticker
             game_id: Game session ID (for logging)
             round_number: Round number (for logging)
@@ -61,17 +62,11 @@ class UpdatePortfolioHandler:
         allocation_before = position_before.allocation
         
         # Step 3: Apply decision to portfolio
-        pl_dollars = Decimal(0)
         shares_after = Decimal(0)
         allocation_after = Decimal(0)
         
-        if decision == "SELL_ALL":
-            pl_dollars = portfolio.apply_sell_all(ticker)
-            shares_after = Decimal(0)
-            allocation_after = Decimal(0)
-            
-        elif decision == "SELL_HALF":
-            pl_dollars = portfolio.apply_sell_half(ticker)
+        if decision == "SELL_HALF":
+            portfolio.apply_sell_half(ticker)
             position_after = portfolio.get_position(ticker)
             if position_after:
                 shares_after = position_after.shares
@@ -82,26 +77,57 @@ class UpdatePortfolioHandler:
             position_after = portfolio.get_position(ticker)
             shares_after = position_after.shares
             allocation_after = position_after.allocation
-            value_after = position_after.calculate_value()
-            pl_dollars = value_after - value_before
             
         elif decision == "BUY":
-            amount_spent = portfolio.apply_buy(ticker, new_price)
-            pl_dollars = -amount_spent  # Negative (spent cash)
+            portfolio.apply_buy(ticker, new_price)
             position_after = portfolio.get_position(ticker)
             shares_after = position_after.shares
             allocation_after = position_after.allocation
-            
-        else:
-            raise ValueError(f"Invalid decision: {decision}")
         
-        # Step 4: Calculate new portfolio value
+        # Step 4: Calculate P/L based on historical price movement
+        # Use historical case data to simulate realistic price changes
+        position_after = portfolio.get_position(ticker)
+        if position_after and historical_case:
+            # Use historical case prices for realistic P/L calculation
+            old_price = historical_case.get("day0_price", position_before.current_price)
+            new_price = historical_case.get("day_h_price", position_after.current_price)
+            shares_held = shares_after  # Use the shares after the decision
+            
+            # Calculate P/L from historical price movement
+            price_change = new_price - old_price
+            pl_dollars = price_change * shares_held
+            
+            print(f"💰 P/L Calculation: {ticker}")
+            print(f"   Historical day0_price: ${old_price}")
+            print(f"   Historical day_h_price: ${new_price}")
+            print(f"   Price change: ${price_change}")
+            print(f"   Shares held: {shares_held}")
+            print(f"   P/L dollars: ${pl_dollars}")
+            print(f"   Historical return: {historical_case.get('return_pct', 0)*100:.2f}%")
+        elif position_after:
+            # Fallback: Use current prices if no historical case
+            old_price = position_before.current_price
+            new_price = position_after.current_price
+            shares_held = shares_after
+            price_change = new_price - old_price
+            pl_dollars = price_change * shares_held
+            
+            print(f"💰 P/L Calculation (fallback): {ticker}")
+            print(f"   Old price: ${old_price}")
+            print(f"   New price: ${new_price}")
+            print(f"   Price change: ${price_change}")
+            print(f"   P/L dollars: ${pl_dollars}")
+        else:
+            pl_dollars = Decimal(0)
+            print(f"⚠️ No position found for {ticker} after decision")
+        
+        # Step 5: Calculate new portfolio value
         new_total_value = portfolio.calculate_total_value()
         
-        # Step 5: Persist to Supabase
+        # Step 6: Persist to Supabase
         await self._save_portfolio(portfolio)
         
-        # Step 6: Log to Opik
+        # Step 7: Log to Opik
         try:
             log_game_event("portfolio_updated", {
                 "game_id": game_id,
@@ -121,7 +147,7 @@ class UpdatePortfolioHandler:
         except Exception as e:
             print(f"Warning: Failed to log to Opik: {e}")
         
-        # Step 7: Return result
+        # Step 8: Return result
         return {
             "portfolio_id": portfolio_id,
             "ticker": ticker,

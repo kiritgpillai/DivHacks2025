@@ -86,11 +86,22 @@ def create_supervisor_node(llm: ChatGoogleGenerativeAI):
         1. round_start -> event_generator
         2. event_generator -> portfolio, news, price, villain, insight (parallel)
         3. All agents complete -> END (wait for player decision)
-        4. decision_submitted -> price (calculate outcome)
-        5. price complete -> insight (track behavior)
-        6. insight complete -> END
+        
+        NOTE: Decision processing is handled directly by SubmitDecisionHandler,
+        NOT through the agent graph. If decision tasks reach here, it's a bug.
         """
+        print(f"🚨 SUPERVISOR CALLED: task='{state.get('task', 'round_start')}', next_agent='{state.get('next_agent', 'END')}'")
         task = state.get("task", "round_start")
+        
+        # GUARD: Prevent decision processing through agent graph
+        if task in ["decision_submitted", "outcome_calculated"]:
+            print(f"⚠️ CRITICAL: Agent graph invoked with task='{task}' - this is a bug!")
+            print("⚠️ Decision processing should use SubmitDecisionHandler directly")
+            print(f"⚠️ State: {state}")
+            print(f"⚠️ Returning END to stop recursion")
+            return {**state, "next_agent": "END"}
+        
+        print(f"🔍 Supervisor called with task='{task}', next_agent='{state.get('next_agent', 'END')}'")
         
         # Round start: Generate event
         if task == "round_start":
@@ -125,13 +136,18 @@ def create_supervisor_node(llm: ChatGoogleGenerativeAI):
             else:
                 return {**state, "next_agent": "END", "task": "round_complete"}
         
-        # Player made decision: Calculate outcome
+        # Decision processing is DISABLED - handled directly by SubmitDecisionHandler
+        # If this code is reached, it means there's a bug where the agent graph
+        # is being invoked for decision processing when it shouldn't be
         elif task == "decision_submitted":
-            return {**state, "next_agent": "price"}
+            print("⚠️ WARNING: Agent graph invoked for decision_submitted - this should not happen!")
+            print("⚠️ Decision processing should use SubmitDecisionHandler directly")
+            return {**state, "next_agent": "END"}
         
-        # Outcome calculated: Track behavior
+        # Outcome calculated: Track behavior (DISABLED)
         elif task == "outcome_calculated":
-            return {**state, "next_agent": "insight"}
+            print("⚠️ WARNING: Agent graph invoked for outcome_calculated - this should not happen!")
+            return {**state, "next_agent": "END"}
         
         # Round complete
         elif task == "round_complete":
@@ -261,51 +277,7 @@ async def start_round(
     }
 
 
-# Helper function to process player decision
-async def process_decision(
-    game_id: str,
-    round_number: int,
-    player_decision: str,
-    decision_time: float,
-    opened_data_tab: bool,
-    historical_case: dict,
-    position_size: float
-) -> dict:
-    """
-    Process player decision and calculate outcome.
-    
-    Args:
-        game_id: Game session ID
-        round_number: Current round number
-        player_decision: SELL_ALL, SELL_HALF, HOLD, or BUY
-        decision_time: Time taken to decide (seconds)
-        opened_data_tab: Whether player opened data tab
-        historical_case: Historical case to apply decision to
-        position_size: Current position size
-        
-    Returns:
-        Outcome data with P/L and behavior tracking
-    """
-    initial_state = {
-        "messages": [
-            HumanMessage(content=f"Player decision: {player_decision}. Decision time: {decision_time:.2f}s. Opened data tab: {opened_data_tab}. Calculate outcome based on historical case.")
-        ],
-        "game_id": game_id,
-        "round_number": round_number,
-        "player_decision": player_decision,
-        "decision_time": decision_time,
-        "opened_data_tab": opened_data_tab,
-        "historical_case": historical_case,
-        "task": "decision_submitted",
-        "next_agent": "supervisor"
-    }
-    
-    result = await game_graph.ainvoke(initial_state)
-    
-    return {
-        "outcome": result.get("outcome"),
-        "pl_dollars": result.get("pl_dollars"),
-        "pl_percent": result.get("pl_percent"),
-        "behavior_flags": result.get("behavior_flags", [])
-    }
+# NOTE: Decision processing is now handled directly by SubmitDecisionHandler
+# This function has been removed to prevent GraphRecursionError
+# The WebSocket handler uses submit_decision_handler.execute() directly
 

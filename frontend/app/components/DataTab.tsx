@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { BarChart3, TrendingUp, Info, Newspaper } from 'lucide-react'
+import { BarChart3, TrendingUp, Info, Newspaper, ExternalLink } from 'lucide-react'
 
 interface DataTabProps {
   data: {
@@ -7,14 +7,13 @@ interface DataTabProps {
       title: string
       source: string
       stance?: string
+      url?: string
     }>
     consensus: string
-    contradiction_score: number
     price_pattern: string
     neutral_tip: string
     historical_outcomes?: {
       similar_cases: number
-      sell_all: { median_return: number, explanation: string }
       sell_half: { median_return: number, explanation: string }
       hold: { median_return: number, explanation: string }
     }
@@ -22,11 +21,6 @@ interface DataTabProps {
 }
 
 export default function DataTab({ data }: DataTabProps) {
-  const contradictionColor = 
-    data.contradiction_score > 0.7 ? 'text-red-400' :
-    data.contradiction_score > 0.4 ? 'text-yellow-400' :
-    'text-green-400'
-
   return (
     <motion.div
       className="bg-gray-800 border-2 border-green-600 rounded-lg p-6 shadow-xl"
@@ -52,54 +46,64 @@ export default function DataTab({ data }: DataTabProps) {
           Recent Headlines
         </h4>
         <div className="space-y-2">
-          {data.headlines.map((headline, idx) => (
-            <div key={idx} className="bg-gray-900 p-3 rounded text-sm">
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <p className="text-gray-200 flex-1">{headline.title}</p>
-                {headline.stance && (
-                  <span className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
-                    headline.stance === 'Bull' ? 'bg-green-900 text-green-300' :
-                    headline.stance === 'Bear' ? 'bg-red-900 text-red-300' :
-                    'bg-gray-700 text-gray-300'
-                  }`}>
-                    {headline.stance}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-500">{headline.source}</p>
-            </div>
-          ))}
+          {data.headlines.map((headline, idx) => {
+            const HeadlineWrapper = headline.url ? 'a' : 'div'
+            const wrapperProps = headline.url ? {
+              href: headline.url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              className: 'bg-gray-900 p-3 rounded text-sm block hover:bg-gray-800 transition-colors cursor-pointer group'
+            } : {
+              className: 'bg-gray-900 p-3 rounded text-sm'
+            }
+
+            return (
+              <HeadlineWrapper key={idx} {...wrapperProps}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <p className="text-gray-200 flex-1 group-hover:text-green-400 transition-colors">
+                    {headline.title}
+                  </p>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {headline.stance && (
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        headline.stance === 'Bull' ? 'bg-green-900 text-green-300' :
+                        headline.stance === 'Bear' ? 'bg-red-900 text-red-300' :
+                        'bg-gray-700 text-gray-300'
+                      }`}>
+                        {headline.stance}
+                      </span>
+                    )}
+                    {headline.url && (
+                      <ExternalLink className="w-3 h-3 text-gray-500 group-hover:text-green-400 transition-colors" />
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">{headline.source}</p>
+              </HeadlineWrapper>
+            )
+          })}
         </div>
       </div>
 
-      {/* Consensus */}
+      {/* Consensus & Price Pattern */}
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-gray-900 p-4 rounded">
           <p className="text-xs text-gray-400 mb-1">Consensus</p>
           <p className="text-lg font-bold text-white">{data.consensus}</p>
         </div>
         <div className="bg-gray-900 p-4 rounded">
-          <p className="text-xs text-gray-400 mb-1">Contradiction</p>
-          <p className={`text-lg font-bold ${contradictionColor}`}>
-            {(data.contradiction_score * 100).toFixed(0)}%
-          </p>
-        </div>
-      </div>
-
-      {/* Price Pattern */}
-      <div className="bg-gray-900 p-4 rounded mb-6">
-        <p className="text-xs text-gray-400 mb-1">Price Pattern</p>
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-gray-400" />
-          <p className="text-sm font-semibold text-white">
-            {data.price_pattern.replace(/_/g, ' ').toUpperCase()}
-          </p>
+          <p className="text-xs text-gray-400 mb-1">Price Pattern</p>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-gray-400" />
+            <p className="text-sm font-semibold text-white">
+              {data.price_pattern.replace(/_/g, ' ').toUpperCase()}
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Historical Outcomes */}
       {data.historical_outcomes && 
-       data.historical_outcomes.sell_all && 
        data.historical_outcomes.sell_half && 
        data.historical_outcomes.hold && (
         <div className="border-t border-gray-700 pt-4">
@@ -107,11 +111,6 @@ export default function DataTab({ data }: DataTabProps) {
             Historical Outcomes ({data.historical_outcomes.similar_cases || 0} similar cases)
           </h4>
           <div className="space-y-2 text-xs">
-            <OutcomeRow
-              label="SELL ALL"
-              return={data.historical_outcomes.sell_all.median_return}
-              explanation={data.historical_outcomes.sell_all.explanation}
-            />
             <OutcomeRow
               label="SELL HALF"
               return={data.historical_outcomes.sell_half.median_return}

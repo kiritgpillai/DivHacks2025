@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { TrendingDown, MinusCircle, Circle, TrendingUp } from 'lucide-react'
+import { MinusCircle, Circle, TrendingUp } from 'lucide-react'
 
 interface DecisionButtonsProps {
   onDecision: (decision: string) => void
@@ -7,20 +7,12 @@ interface DecisionButtonsProps {
 
 const decisions = [
   {
-    value: 'SELL_ALL',
-    label: 'SELL ALL',
-    description: 'Exit entire position',
-    icon: TrendingDown,
-    color: 'from-red-600 to-red-700 hover:from-red-700 hover:to-red-800',
-    textColor: 'text-red-100'
-  },
-  {
-    value: 'SELL_HALF',
-    label: 'SELL HALF',
-    description: 'Lock in 50%, reduce risk',
-    icon: MinusCircle,
-    color: 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800',
-    textColor: 'text-orange-100'
+    value: 'BUY',
+    label: 'BUY MORE',
+    description: 'Add 10% to position',
+    icon: TrendingUp,
+    color: 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
+    textColor: 'text-green-100'
   },
   {
     value: 'HOLD',
@@ -31,12 +23,12 @@ const decisions = [
     textColor: 'text-blue-100'
   },
   {
-    value: 'BUY',
-    label: 'BUY MORE',
-    description: 'Add 10% to position',
-    icon: TrendingUp,
-    color: 'from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
-    textColor: 'text-green-100'
+    value: 'SELL_HALF',
+    label: 'SELL HALF',
+    description: 'Lock in 50%, reduce risk',
+    icon: MinusCircle,
+    color: 'from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800',
+    textColor: 'text-orange-100'
   }
 ]
 

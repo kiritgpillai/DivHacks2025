@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 import os
 import json
+import asyncio
 
 # Initialize Supabase client
 try:
@@ -119,7 +120,7 @@ class StartGameRequest(BaseModel):
 class SubmitDecisionRequest(BaseModel):
     game_id: str
     round_number: int
-    player_decision: str  # SELL_ALL, SELL_HALF, HOLD, BUY
+    player_decision: str  # SELL_HALF, HOLD, BUY
     decision_time: float
     opened_data_tab: bool
 
@@ -568,6 +569,23 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                     "type": "round_started",
                     "data": round_result
                 })
+                
+                # Start background price agent AFTER question is sent to user
+                # This pre-calculates historical outcomes for instant decision processing
+                from backend.infrastructure.agents.price_agent import background_price_agent
+                background_task = asyncio.create_task(
+                    background_price_agent(
+                        ticker=event["ticker"],
+                        event_type=event["type"],
+                        event_horizon=event["horizon"],
+                        game_id=game_id,
+                        round_number=round_number
+                    )
+                )
+                
+                # Store background task for instant decision processing
+                game_session[f"round_{round_number}_background_task"] = background_task
+                print(f"🚀 Started background price agent for {event['ticker']} (Round {round_number})")
             
             elif message_type == "submit_decision":
                 # Submit decision and get outcome
@@ -586,6 +604,7 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                 round_data = game_session.get(f"round_{round_number}_data", {})
                 ticker = round_data.get("ticker")
                 event_data = round_data.get("event_data")
+                background_price_task = game_session.get(f"round_{round_number}_background_task")
                 
                 if not ticker:
                     await websocket.send_json({
@@ -594,15 +613,47 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                     })
                     continue
                 
-                # Get current price for the DYNAMIC ticker
-                from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
-                try:
-                    current_price = await get_current_price(ticker)
-                except Exception as e:
-                    print(f"Warning: Failed to fetch price for {ticker}: {e}")
-                    current_price = 100.0
+                # Use pre-calculated background price agent results for instant processing
+                if background_price_task:
+                    if background_price_task.done():
+                        # Background task completed, use results
+                        try:
+                            background_result = background_price_task.result()
+                            current_price = background_result.get("current_price", 100.0)
+                            historical_case = background_result.get("historical_case")
+                            historical_outcomes = background_result.get("historical_outcomes")
+                            print(f"✅ Used completed background price agent results for {ticker}")
+                        except Exception as e:
+                            print(f"⚠️ Background price agent error for {ticker}: {e}")
+                            current_price = 100.0
+                            historical_case = None
+                            historical_outcomes = None
+                    else:
+                        # Background task still running, wait for it (should be very fast)
+                        try:
+                            background_result = await asyncio.wait_for(background_price_task, timeout=1.0)
+                            current_price = background_result.get("current_price", 100.0)
+                            historical_case = background_result.get("historical_case")
+                            historical_outcomes = background_result.get("historical_outcomes")
+                            print(f"✅ Used background price agent results for {ticker} (waited)")
+                        except asyncio.TimeoutError:
+                            print(f"⚠️ Background price agent timeout for {ticker}, using fallback")
+                            current_price = 100.0
+                            historical_case = None
+                            historical_outcomes = None
+                else:
+                    # No background task, get current price directly
+                    from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+                    try:
+                        current_price = await get_current_price(ticker)
+                    except Exception as e:
+                        print(f"Warning: Failed to fetch price for {ticker}: {e}")
+                        current_price = 100.0
+                    historical_case = None
+                    historical_outcomes = None
                 
                 # Submit decision with all required parameters
+                # Pass pre-calculated historical case for instant processing
                 decision_result = await submit_decision_handler.execute(
                     game_id=game_id,
                     round_number=round_number,
@@ -612,7 +663,9 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                     portfolio_id=game_session["portfolio_id"],  # For Supabase updates
                     ticker=ticker,                              # DYNAMIC: User's ticker
                     new_price=current_price,                    # Current market price
-                    event_data=event_data                       # Event context for storage
+                    event_data=event_data,                      # Event context for storage
+                    historical_case=historical_case,           # Pre-calculated for instant processing
+                    historical_outcomes=historical_outcomes     # Pre-calculated for data tab
                 )
                 
                 # Update game session cache with new portfolio values
