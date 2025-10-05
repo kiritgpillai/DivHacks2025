@@ -233,7 +233,7 @@ implementation_roadmap.md (MASTER)
 **Market Mayhem is complete when:**
 - [ ] All phases in `implementation_roadmap.md` completed
 - [ ] 6 agents working (Event Generator, Portfolio, News, Price, Villain, Insight)
-- [ ] Complete game flow: Portfolio Setup → Round 0 → 5-7 Event Rounds → Final Summary
+- [ ] Complete game flow: Portfolio Setup → Round 0 → 3 Event Rounds → Final Summary
 - [ ] Data tab shows: headlines with stance, fundamentals, recent price behavior, historical outcomes
 - [ ] Villain AI generates biased takes with labeled cognitive biases
 - [ ] Outcomes replay using matched historical price windows (not random)

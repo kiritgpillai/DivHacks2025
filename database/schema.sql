@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
 CREATE TABLE IF NOT EXISTS game_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     portfolio_id UUID NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
-    current_round INT DEFAULT 0 CHECK (current_round >= 0 AND current_round <= 5),
+    current_round INT DEFAULT 0 CHECK (current_round >= 0 AND current_round <= 3),
     portfolio_value DECIMAL NOT NULL,
     started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_at TIMESTAMP WITH TIME ZONE,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS game_sessions (
 CREATE TABLE IF NOT EXISTS game_rounds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
-    round_number INT NOT NULL CHECK (round_number >= 1 AND round_number <= 5),
+    round_number INT NOT NULL CHECK (round_number >= 1 AND round_number <= 3),
     
     -- Event data
     ticker TEXT NOT NULL,

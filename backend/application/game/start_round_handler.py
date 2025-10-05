@@ -27,7 +27,7 @@ class StartRoundHandler:
         
         Args:
             game_id: Game session ID
-            round_number: Round number (1-5)
+            round_number: Round number (1-3)
             
         Returns:
             Dict with event, villain take, and data tab

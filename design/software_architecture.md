@@ -399,7 +399,7 @@ Player clicks "SELL HALF" after 18.5 seconds
   → Client renders P/L animation
 ```
 
-### 5. Repeat for 5-7 Rounds
+### 5. Repeat for 3 Rounds
 
 Each round:
 - Select different ticker from portfolio
@@ -415,7 +415,7 @@ After final round:
   → GenerateFinalReportHandler
     → Insight Agent: aggregate all decision logs
     → Calculate metrics:
-      - Data tab usage: 6/7 rounds (85%)
+      - Data tab usage: 2/3 rounds (67%)
       - Consensus alignment: 5/7 decisions (71%)
       - Villain resistance: Followed Villain 1/7 times under high contradiction (14%)
       - Panic sells: 0

@@ -97,15 +97,29 @@ def create_supervisor_node(llm: ChatGoogleGenerativeAI):
             # In a real implementation, we'd run these in parallel
             # For MVP, we'll run sequentially: portfolio -> news -> price -> villain -> insight
             if not state.get("price_snapshot"):
-                return {**state, "next_agent": "price"}
+                return {**state, "next_agent": "price", "task": "fetching_data"}
             elif not state.get("headlines"):
-                return {**state, "next_agent": "news"}
+                return {**state, "next_agent": "news", "task": "fetching_data"}
             elif not state.get("villain_hot_take"):
-                return {**state, "next_agent": "villain"}
+                return {**state, "next_agent": "villain", "task": "fetching_data"}
             elif not state.get("neutral_tip"):
-                return {**state, "next_agent": "insight"}
+                return {**state, "next_agent": "insight", "task": "fetching_data"}
             else:
-                return {**state, "next_agent": "END"}
+                return {**state, "next_agent": "END", "task": "round_complete"}
+        
+        # Fetching data: Continue with next agent
+        elif task == "fetching_data":
+            # Continue with the same logic as event_generated
+            if not state.get("price_snapshot"):
+                return {**state, "next_agent": "price", "task": "fetching_data"}
+            elif not state.get("headlines"):
+                return {**state, "next_agent": "news", "task": "fetching_data"}
+            elif not state.get("villain_hot_take"):
+                return {**state, "next_agent": "villain", "task": "fetching_data"}
+            elif not state.get("neutral_tip"):
+                return {**state, "next_agent": "insight", "task": "fetching_data"}
+            else:
+                return {**state, "next_agent": "END", "task": "round_complete"}
         
         # Player made decision: Calculate outcome
         elif task == "decision_submitted":

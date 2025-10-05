@@ -141,7 +141,7 @@ export default function GamePage() {
 
     const nextRound = state.round + 1
     
-    if (nextRound > 5) {
+    if (nextRound > 3) {
       // Game complete, show final report
       wsRef.current.send(JSON.stringify({ type: 'get_report' }))
       router.push(`/game/${gameId}/report`)
@@ -198,7 +198,7 @@ export default function GamePage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">
-            Round {state.round} of 5
+            Round {state.round} of 3
           </h1>
           {state.dataTab && (
             <button
@@ -268,7 +268,7 @@ export default function GamePage() {
           <OutcomeModal
             outcome={state.outcome}
             onNextRound={handleNextRound}
-            isLastRound={state.round === 5}
+            isLastRound={state.round === 3}
           />
         )}
       </div>

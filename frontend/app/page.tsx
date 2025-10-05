@@ -41,7 +41,7 @@ export default function HomePage() {
         </Link>
 
         <p className="mt-6 text-sm text-gray-400">
-          5 rounds • 5 decisions • Real historical data
+          3 rounds • 3 decisions • Real historical data
         </p>
       </div>
     </div>
