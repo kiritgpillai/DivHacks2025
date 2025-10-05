@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
     tickers TEXT[] NOT NULL,
     allocations JSONB NOT NULL,
     cash DECIMAL NOT NULL DEFAULT 0,
+    initial_cash DECIMAL NOT NULL DEFAULT 1000000,
     total_value DECIMAL NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

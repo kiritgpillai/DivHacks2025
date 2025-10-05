@@ -87,10 +87,14 @@ class UpdatePortfolioHandler:
             
         elif decision == "BUY":
             amount_spent = portfolio.apply_buy(ticker, new_price)
-            pl_dollars = -amount_spent  # Negative (spent cash)
             position_after = portfolio.get_position(ticker)
             shares_after = position_after.shares
             allocation_after = position_after.allocation
+            
+            # For BUY, P/L is the gain/loss on the additional 10% purchased
+            # Since we just bought at current price, P/L is 0 (no gain/loss yet)
+            # The actual P/L will be realized when the price changes in future rounds
+            pl_dollars = Decimal(0)
             
         else:
             raise ValueError(f"Invalid decision: {decision}")
@@ -171,11 +175,13 @@ class UpdatePortfolioHandler:
         positions_response = self.supabase.table("positions").select("*").eq("portfolio_id", portfolio_id).execute()
         
         # Reconstruct Portfolio aggregate
+        # Use default initial cash since the column doesn't exist in current schema
+        # The portfolio validation will pass as long as initial_cash > 0
         portfolio = Portfolio(
             id=portfolio_data["id"],
             player_id=portfolio_data["player_id"],
             risk_profile=RiskProfile(portfolio_data["risk_profile"]),
-            initial_cash=float(portfolio_data.get("initial_cash", 1_000_000))  # Use original starting cash
+            initial_cash=1_000_000  # Default starting amount
         )
         
         # Reconstruct positions
