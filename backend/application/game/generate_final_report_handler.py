@@ -1,7 +1,7 @@
 """Generate Final Report Use Case Handler"""
 
 from typing import Dict, List
-from backend.infrastructure.agents.tools.insight_tools import (
+from infrastructure.agents.tools.insight_tools import (
     aggregate_behavior,
     classify_profile,
     generate_coaching
@@ -75,12 +75,14 @@ class GenerateFinalReportHandler:
         # Get the final portfolio value from the most recent portfolio update
         final_portfolio_value = await self._get_final_portfolio_value(game_id)
         
-        # Calculate total P/L as the difference between final and initial values
-        initial_investment = 1_000_000  # Default starting amount
-        total_pl = final_portfolio_value - initial_investment
+        # Get the actual initial portfolio value (not hardcoded)
+        initial_portfolio_value = await self._get_initial_portfolio_value(game_id)
         
-        # Calculate return percentage based on initial investment
-        total_return = (total_pl / initial_investment) * 100 if initial_investment > 0 else 0
+        # Calculate total P/L as the difference between final and initial values
+        total_pl = final_portfolio_value - initial_portfolio_value
+        
+        # Calculate return percentage based on actual initial investment
+        total_return = (total_pl / initial_portfolio_value) * 100 if initial_portfolio_value > 0 else 0
         
         return {
             "game_id": game_id,
@@ -194,5 +196,45 @@ class GenerateFinalReportHandler:
             
         except Exception as e:
             print(f"Error fetching final portfolio value for game {game_id}: {e}")
+            return 1_000_000  # Default fallback
+    
+    async def _get_initial_portfolio_value(self, game_id: str) -> float:
+        """
+        Get the initial portfolio value for the game.
+        
+        Args:
+            game_id: Game session ID
+            
+        Returns:
+            Initial portfolio value
+        """
+        if not self.supabase:
+            return 1_000_000  # Default fallback
+        
+        try:
+            # Get the portfolio_id from the game session
+            session_response = self.supabase.table("game_sessions").select("portfolio_id").eq("id", game_id).execute()
+            
+            if not session_response.data:
+                return 1_000_000  # Default fallback
+            
+            portfolio_id = session_response.data[0]["portfolio_id"]
+            
+            # Calculate initial value as cash + sum of initial allocations (no initial_cash column in schema)
+            portfolio_response = self.supabase.table("portfolios").select("cash").eq("id", portfolio_id).execute()
+            positions_response = self.supabase.table("positions").select("allocation").eq("portfolio_id", portfolio_id).execute()
+            
+            if not portfolio_response.data:
+                return 1_000_000  # Default fallback
+            
+            current_cash = float(portfolio_response.data[0].get("cash", 0) or 0)
+            total_allocations = sum(float(pos["allocation"]) for pos in (positions_response.data or []))
+            
+            # If both are zero (unlikely), fall back to 1,000,000
+            initial_value = current_cash + total_allocations
+            return initial_value if initial_value > 0 else 1_000_000
+            
+        except Exception as e:
+            print(f"Error fetching initial portfolio value for game {game_id}: {e}")
             return 1_000_000  # Default fallback
 

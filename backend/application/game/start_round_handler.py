@@ -1,7 +1,7 @@
 """Start Round Use Case Handler"""
 
 from typing import Dict, Optional
-from backend.infrastructure.agents.game_graph import start_round
+from infrastructure.agents.game_graph import start_round
 
 
 class StartRoundHandler:

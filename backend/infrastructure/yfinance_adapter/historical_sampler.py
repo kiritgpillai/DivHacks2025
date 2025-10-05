@@ -86,36 +86,40 @@ async def apply_decision_to_path(
     
     if decision == "SELL_ALL":
         # Exit entire position at day 0, no further exposure
+        # P/L is $0 because we exit at current price (no gain/loss)
         pl_dollars = Decimal(0)
         pl_percent = Decimal(0)
-        explanation = f"Exited entire ${position_size:,.0f} position at ${day0_price:.2f}. No further impact from price moving to ${day_h_price:.2f}."
+        explanation = f"Exited entire ${position_size:,.0f} position at ${day0_price:.2f}. No P/L since exit at current price."
         
     elif decision == "SELL_HALF":
         # Exit half at day 0, remaining half rides to day H
+        # P/L is only on the remaining half that rides the price change
         half_size = position_size_decimal / Decimal(2)
         day_h_return = (day_h_price - day0_price) / day0_price
-        pl_dollars = half_size * day_h_return
-        pl_percent = day_h_return / Decimal(2)  # Weighted average (half exposed)
+        pl_dollars = half_size * day_h_return  # P/L only on remaining half
+        pl_percent = day_h_return / Decimal(2)  # Weighted by half exposure
         
-        explanation = f"Sold half (${float(half_size):,.0f}) at ${day0_price:.2f}. Remaining half rode from ${day0_price:.2f} to ${day_h_price:.2f} ({float(day_h_return)*100:.2f}%). Weighted P/L: {float(pl_percent)*100:.2f}%."
+        explanation = f"Sold half (${float(half_size):,.0f}) at ${day0_price:.2f}. Remaining half rode from ${day0_price:.2f} to ${day_h_price:.2f} ({float(day_h_return)*100:.2f}%). P/L on remaining half: {float(pl_percent)*100:.2f}%."
         
     elif decision == "HOLD":
         # Full position rides to day H
+        # P/L is the gain/loss from entry price to final price
         day_h_return = (day_h_price - day0_price) / day0_price
         pl_dollars = position_size_decimal * day_h_return
         pl_percent = day_h_return
         
-        explanation = f"Held entire ${position_size:,.0f} position. Price moved from ${day0_price:.2f} to ${day_h_price:.2f} ({float(day_h_return)*100:.2f}%)."
+        explanation = f"Held entire ${position_size:,.0f} position. Price moved from ${day0_price:.2f} to ${day_h_price:.2f} ({float(day_h_return)*100:.2f}%). Full exposure to price movement."
         
     elif decision == "BUY":
         # Add 10% to position, total position rides to day H
+        # P/L is calculated on the additional 10% purchased
         buy_size = position_size_decimal * Decimal("0.1")
         total_size = position_size_decimal + buy_size
         day_h_return = (day_h_price - day0_price) / day0_price
-        pl_dollars = total_size * day_h_return
-        pl_percent = day_h_return * (total_size / position_size_decimal)  # Weighted by increased position
+        pl_dollars = buy_size * day_h_return  # P/L only on the additional 10%
+        pl_percent = day_h_return * Decimal("0.1")  # Weighted by 10% addition
         
-        explanation = f"Added ${float(buy_size):,.0f} (10%) to ${position_size:,.0f} position at ${day0_price:.2f}. Total ${float(total_size):,.0f} rode to ${day_h_price:.2f} ({float(day_h_return)*100:.2f}%)."
+        explanation = f"Added ${float(buy_size):,.0f} (10%) to ${position_size:,.0f} position at ${day0_price:.2f}. P/L on additional 10%: {float(pl_percent)*100:.2f}%."
         
     else:
         raise ValueError(f"Invalid decision: {decision}")

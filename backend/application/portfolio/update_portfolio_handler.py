@@ -2,10 +2,10 @@
 
 from typing import Dict, Optional
 from decimal import Decimal
-from backend.domain.portfolio.portfolio import Portfolio
-from backend.domain.portfolio.position import Position
-from backend.domain.portfolio.risk_profile import RiskProfile
-from backend.infrastructure.observability.opik_tracer import log_game_event
+from domain.portfolio.portfolio import Portfolio
+from domain.portfolio.position import Position
+from domain.portfolio.risk_profile import RiskProfile
+from infrastructure.observability.opik_tracer import log_game_event
 
 
 class UpdatePortfolioHandler:
@@ -60,41 +60,61 @@ class UpdatePortfolioHandler:
         shares_before = position_before.shares
         allocation_before = position_before.allocation
         
-        # Step 3: Apply decision to portfolio
+        # Step 3: Apply decision to portfolio and calculate P/L correctly
         pl_dollars = Decimal(0)
+        pl_percent = Decimal(0)
         shares_after = Decimal(0)
         allocation_after = Decimal(0)
         
         if decision == "SELL_ALL":
-            pl_dollars = portfolio.apply_sell_all(ticker)
+            # SELL_ALL: Exit at current price, no P/L (exit before any price movement)
+            # Ensure we settle at the provided new_price for realized value
+            position_now = portfolio.get_position(ticker)
+            if position_now:
+                position_now.update_price(new_price)
+            portfolio.apply_sell_all(ticker)
+            pl_dollars = Decimal(0)
+            pl_percent = Decimal(0)
             shares_after = Decimal(0)
             allocation_after = Decimal(0)
             
         elif decision == "SELL_HALF":
-            pl_dollars = portfolio.apply_sell_half(ticker)
+            # SELL_HALF: Realize half at current price, remaining half rides price change
+            portfolio.apply_sell_half(ticker)
             position_after = portfolio.get_position(ticker)
             if position_after:
+                # Ensure remaining half reflects the latest market price
+                position_after.update_price(new_price)
                 shares_after = position_after.shares
                 allocation_after = position_after.allocation
+                # P/L is the gain/loss on the remaining half that rides the price change
+                # Since we just sold half at current price, P/L is 0 on the sold half
+                # The remaining half will have P/L based on price change from entry
+                pl_dollars = position_after.calculate_value() - position_after.allocation
+                pl_percent = pl_dollars / position_after.allocation if position_after.allocation > 0 else Decimal(0)
             
         elif decision == "HOLD":
+            # HOLD: Full position rides price change from entry to current price
             portfolio.apply_hold(ticker, new_price)
             position_after = portfolio.get_position(ticker)
             shares_after = position_after.shares
             allocation_after = position_after.allocation
-            value_after = position_after.calculate_value()
-            pl_dollars = value_after - value_before
+            # P/L is the gain/loss from entry price to current price
+            pl_dollars = position_after.calculate_value() - position_after.allocation
+            pl_percent = pl_dollars / position_after.allocation if position_after.allocation > 0 else Decimal(0)
             
         elif decision == "BUY":
+            # BUY: Add 10% to position, calculate P/L on the additional 10%
             amount_spent = portfolio.apply_buy(ticker, new_price)
             position_after = portfolio.get_position(ticker)
             shares_after = position_after.shares
             allocation_after = position_after.allocation
             
-            # For BUY, P/L is the gain/loss on the additional 10% purchased
+            # P/L is the gain/loss on the additional 10% purchased
             # Since we just bought at current price, P/L is 0 (no gain/loss yet)
             # The actual P/L will be realized when the price changes in future rounds
             pl_dollars = Decimal(0)
+            pl_percent = Decimal(0)
             
         else:
             raise ValueError(f"Invalid decision: {decision}")
@@ -126,17 +146,24 @@ class UpdatePortfolioHandler:
             print(f"Warning: Failed to log to Opik: {e}")
         
         # Step 7: Return result
-        return {
+        # Normalize tiny negative zeros for cleaner UI
+        def _clean_number(value: Decimal | float) -> float:
+            v = float(value)
+            if abs(v) < 1e-9:
+                return 0.0
+            return v
+
+        result = {
             "portfolio_id": portfolio_id,
             "ticker": ticker,
             "decision": decision,
-            "pl_dollars": float(pl_dollars),
-            "pl_percent": float((pl_dollars / value_before) * 100) if value_before > 0 else 0,
+            "pl_dollars": _clean_number(pl_dollars),
+            "pl_percent": _clean_number(pl_percent),
             "shares_before": float(shares_before),
             "shares_after": float(shares_after),
             "allocation_before": float(allocation_before),
             "allocation_after": float(allocation_after),
-            "new_total_value": float(new_total_value),
+            "new_total_value": _clean_number(new_total_value),
             "cash": float(portfolio.cash),
             "positions": [
                 {
@@ -149,6 +176,14 @@ class UpdatePortfolioHandler:
                 for p in portfolio.positions
             ]
         }
+
+        # Also return a minimal mirror for in-memory cache updates
+        result["portfolio_min"] = {
+            "portfolio_value": result["new_total_value"],
+            "allocations": {pos["ticker"]: pos["allocation"] for pos in result["positions"]}
+        }
+
+        return result
     
     async def _fetch_portfolio(self, portfolio_id: str) -> Portfolio:
         """
@@ -175,13 +210,19 @@ class UpdatePortfolioHandler:
         positions_response = self.supabase.table("positions").select("*").eq("portfolio_id", portfolio_id).execute()
         
         # Reconstruct Portfolio aggregate
-        # Use default initial cash since the column doesn't exist in current schema
-        # The portfolio validation will pass as long as initial_cash > 0
+        # Get actual initial cash from portfolio data or calculate from positions
+        initial_cash = portfolio_data.get("initial_cash", 1_000_000)
+        if not initial_cash or initial_cash <= 0:
+            # Calculate initial cash from current positions + cash
+            total_allocations = sum(float(pos["allocation"]) for pos in positions_response.data) if positions_response.data else 0
+            current_cash = float(portfolio_data.get("cash", 0))
+            initial_cash = total_allocations + current_cash
+        
         portfolio = Portfolio(
             id=portfolio_data["id"],
             player_id=portfolio_data["player_id"],
             risk_profile=RiskProfile(portfolio_data["risk_profile"]),
-            initial_cash=1_000_000  # Default starting amount
+            initial_cash=float(initial_cash)
         )
         
         # Reconstruct positions

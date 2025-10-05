@@ -5,7 +5,7 @@ from langchain.tools import tool
 import json
 import random
 import google.generativeai as genai
-from backend.config import GEMINI_MODEL
+from config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))

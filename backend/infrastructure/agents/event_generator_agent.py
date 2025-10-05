@@ -4,7 +4,7 @@ import os
 import json
 import random
 from langchain_google_genai import ChatGoogleGenerativeAI
-from backend.config import GEMINI_MODEL, TEMPERATURE_EVENT_GENERATOR
+from config import GEMINI_MODEL, TEMPERATURE_EVENT_GENERATOR
 
 # Initialize LLM (only used for event description generation)
 llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_EVENT_GENERATOR)

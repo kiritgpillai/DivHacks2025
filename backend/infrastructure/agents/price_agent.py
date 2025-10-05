@@ -1,7 +1,7 @@
 """Price Agent - Handles price data and historical outcome replay"""
 
 import os
-from backend.infrastructure.yfinance_adapter.price_fetcher import get_price_snapshot as fetch_price, detect_price_pattern
+from infrastructure.yfinance_adapter.price_fetcher import get_price_snapshot as fetch_price, detect_price_pattern
 
 
 async def price_agent(state: dict) -> dict:
@@ -29,17 +29,7 @@ async def price_agent(state: dict) -> dict:
             "price_pattern": pattern
         }
     except Exception as e:
-        # Fallback data
-        return {
-            **state,
-            "price_snapshot": {
-                "ticker": ticker,
-                "current": 100.0,
-                "sparkline": [98, 99, 100, 101, 100],
-                "high_5d": 102.0,
-                "low_5d": 97.0,
-                "volume_avg": 1000000
-            },
-            "price_pattern": "neutral"
-        }
+        # No fallback data - raise error to ensure proper error handling
+        print(f"Error fetching price data for {ticker}: {e}")
+        raise ValueError(f"Failed to fetch price data for {ticker}: {str(e)}")
 

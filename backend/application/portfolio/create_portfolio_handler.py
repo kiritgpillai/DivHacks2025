@@ -2,9 +2,9 @@
 
 from typing import List, Dict
 import uuid
-from backend.domain.portfolio.portfolio import Portfolio
-from backend.domain.portfolio.risk_profile import RiskProfile
-from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+from domain.portfolio.portfolio import Portfolio
+from domain.portfolio.risk_profile import RiskProfile
+from infrastructure.yfinance_adapter.price_fetcher import get_current_price
 
 
 class CreatePortfolioHandler:

@@ -65,7 +65,7 @@ class StartGameHandler:
         
         # Log to Opik
         try:
-            from backend.infrastructure.observability.opik_tracer import log_game_event
+            from infrastructure.observability.opik_tracer import log_game_event
             log_game_event("game_started", {
                 "game_id": game_id,
                 "portfolio_id": portfolio_id,

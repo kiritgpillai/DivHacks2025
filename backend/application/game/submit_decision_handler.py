@@ -1,8 +1,10 @@
 """Submit Decision Use Case Handler"""
 
 from typing import Dict
-from backend.application.portfolio.update_portfolio_handler import UpdatePortfolioHandler
-from backend.infrastructure.observability.opik_tracer import log_game_event
+from decimal import Decimal
+from backend.infrastructure.yfinance_adapter.historical_sampler import sample_historical_window
+from application.portfolio.update_portfolio_handler import UpdatePortfolioHandler
+from infrastructure.observability.opik_tracer import log_game_event
 
 
 class SubmitDecisionHandler:
@@ -59,7 +61,25 @@ class SubmitDecisionHandler:
         if not ticker or new_price is None:
             raise ValueError("ticker and new_price are required for portfolio updates")
         
-        # Step 1: Update portfolio if portfolio_id provided
+        # Step 1: Sample historical window for this round to drive per-asset movement
+        round_horizon = (event_data or {}).get("horizon", 3)
+        event_type = (event_data or {}).get("type", "UNKNOWN")
+        try:
+            hist_case = await sample_historical_window(ticker=ticker, event_type=event_type, horizon=round_horizon)
+            day0_price = Decimal(str(hist_case["day0_price"]))
+            day_h_price = Decimal(str(hist_case["day_h_price"]))
+        except Exception as e:
+            print(f"Warning: Failed to sample historical window: {e}")
+            # Fall back to provided new_price for a minimal flow
+            day0_price = Decimal(str(new_price))
+            day_h_price = Decimal(str(new_price))
+
+        # Decide which price to use to update state (end-of-round settlement)
+        # - SELL_ALL settles at day0 (exit now)
+        # - Others settle at day H (end of round)
+        state_settle_price = float(day0_price if player_decision == "SELL_ALL" else day_h_price)
+
+        # Step 2: Update portfolio state at the appropriate settlement price
         portfolio_update = None
         if portfolio_id:
             try:
@@ -67,28 +87,64 @@ class SubmitDecisionHandler:
                     portfolio_id=portfolio_id,
                     ticker=ticker,
                     decision=player_decision,
-                    new_price=new_price,
+                    new_price=state_settle_price,
                     game_id=game_id,
                     round_number=round_number
                 )
             except Exception as e:
                 print(f"Warning: Portfolio update failed: {e}")
-                # Continue with mock P/L calculation
-        
-        # Step 2: Get P/L from portfolio update
-        # We no longer need to invoke the agent graph for decision processing
-        # Portfolio update handler already calculated P/L based on actual price changes
+
+        # Step 3: Compute per-asset P/L for this round using historical prices
+        # Use pre-update details to derive entry price
         if portfolio_update:
-            pl_dollars = portfolio_update["pl_dollars"]
-            pl_percent = portfolio_update["pl_percent"]
+            allocation_before = Decimal(str(portfolio_update.get("allocation_before", 0)))
+            shares_before = Decimal(str(portfolio_update.get("shares_before", 0)))
         else:
-            # Fallback: If portfolio update failed, use mock calculation
-            # This should rarely happen in production
-            print("Warning: Using mock P/L calculation (portfolio update unavailable)")
+            allocation_before = Decimal("0")
+            shares_before = Decimal("0")
+
+        entry_price = (allocation_before / shares_before) if shares_before > 0 else Decimal("0")
+        round_pl_dollars = Decimal("0")
+        round_pl_percent = Decimal("0")
+
+        try:
+            if player_decision == "HOLD":
+                asset_return = (day_h_price - entry_price) / entry_price if entry_price > 0 else Decimal("0")
+                round_pl_dollars = allocation_before * asset_return
+                round_pl_percent = asset_return
+            elif player_decision == "SELL_ALL":
+                asset_return = (day0_price - entry_price) / entry_price if entry_price > 0 else Decimal("0")
+                round_pl_dollars = allocation_before * asset_return
+                round_pl_percent = asset_return
+            elif player_decision == "SELL_HALF":
+                half_alloc = allocation_before / Decimal("2")
+                ret_day0 = (day0_price - entry_price) / entry_price if entry_price > 0 else Decimal("0")
+                ret_dayh = (day_h_price - entry_price) / entry_price if entry_price > 0 else Decimal("0")
+                realized = half_alloc * ret_day0
+                unrealized = half_alloc * ret_dayh
+                round_pl_dollars = realized + unrealized
+                round_pl_percent = (round_pl_dollars / allocation_before) if allocation_before > 0 else Decimal("0")
+            elif player_decision == "BUY":
+                buy_size = allocation_before * Decimal("0.1")
+                buy_return = (day_h_price - day0_price) / day0_price if day0_price > 0 else Decimal("0")
+                round_pl_dollars = buy_size * buy_return
+                round_pl_percent = buy_return * Decimal("0.1")
+            else:
+                round_pl_dollars = Decimal("0")
+                round_pl_percent = Decimal("0")
+        except Exception as e:
+            print(f"Warning: Failed P/L computation: {e}")
+
+        # Prefer our per-asset P/L; store percent as percentage units (e.g., 5.25 for 5.25%)
+        pl_dollars = float(round_pl_dollars)
+        pl_percent = float(round(round_pl_percent * Decimal("100"), 4))
+        # Clean near-zero noise
+        if abs(pl_dollars) < 1e-9:
             pl_dollars = 0.0
+        if abs(pl_percent) < 1e-9:
             pl_percent = 0.0
         
-        # Step 3: Store round outcome to Supabase
+        # Step 4: Store round outcome to Supabase
         if self.supabase and event_data:
             try:
                 await self._save_round_outcome(
@@ -105,7 +161,7 @@ class SubmitDecisionHandler:
             except Exception as e:
                 print(f"Warning: Failed to save round outcome: {e}")
         
-        # Step 4: Log to Opik
+        # Step 5: Log to Opik
         try:
             log_game_event("decision_submitted", {
                 "game_id": game_id,

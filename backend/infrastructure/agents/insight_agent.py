@@ -2,7 +2,7 @@
 
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
-from backend.config import GEMINI_MODEL, TEMPERATURE_INSIGHT
+from config import GEMINI_MODEL, TEMPERATURE_INSIGHT
 
 # Initialize LLM
 llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_INSIGHT)

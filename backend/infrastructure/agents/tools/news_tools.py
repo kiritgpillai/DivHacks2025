@@ -13,7 +13,7 @@ except ImportError:
     tavily = None
 
 import google.generativeai as genai
-from backend.config import GEMINI_MODEL
+from config import GEMINI_MODEL
 
 # Configure Gemini
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))

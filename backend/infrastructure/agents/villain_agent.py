@@ -3,7 +3,7 @@
 import os
 import random
 from langchain_google_genai import ChatGoogleGenerativeAI
-from backend.config import GEMINI_MODEL, TEMPERATURE_VILLAIN
+from config import GEMINI_MODEL, TEMPERATURE_VILLAIN
 
 # Initialize LLM
 llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=TEMPERATURE_VILLAIN)

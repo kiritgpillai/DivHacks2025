@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from backend.config import GEMINI_MODEL, TEMPERATURE_SUPERVISOR
+from config import GEMINI_MODEL, TEMPERATURE_SUPERVISOR
 
 from .event_generator_agent import event_generator_agent
 from .portfolio_agent import portfolio_agent

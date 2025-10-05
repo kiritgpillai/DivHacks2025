@@ -23,30 +23,30 @@ try:
     if SUPABASE_URL and SUPABASE_KEY:
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
         SUPABASE_AVAILABLE = True
-        print("✅ Supabase client initialized")
+        print("Supabase client initialized")
     else:
         supabase = None
         SUPABASE_AVAILABLE = False
-        print("⚠️  SUPABASE_URL or SUPABASE_KEY not set. Using in-memory storage.")
+        print("WARNING: SUPABASE_URL or SUPABASE_KEY not set. Using in-memory storage.")
 except ImportError:
     supabase = None
     SUPABASE_AVAILABLE = False
-    print("⚠️  Supabase package not installed. Run: pip install supabase")
+    print("WARNING: Supabase package not installed. Run: pip install supabase")
 
 # Import application handlers (these import agents which need API keys)
-from backend.application.portfolio.create_portfolio_handler import CreatePortfolioHandler
-from backend.application.game.start_game_handler import StartGameHandler
-from backend.application.game.start_round_handler import StartRoundHandler
-from backend.application.game.submit_decision_handler import SubmitDecisionHandler
-from backend.application.game.generate_final_report_handler import GenerateFinalReportHandler
+from application.portfolio.create_portfolio_handler import CreatePortfolioHandler
+from application.game.start_game_handler import StartGameHandler
+from application.game.start_round_handler import StartRoundHandler
+from application.game.submit_decision_handler import SubmitDecisionHandler
+from application.game.generate_final_report_handler import GenerateFinalReportHandler
 
 # Import observability
 try:
-    from backend.infrastructure.observability import setup_opik, setup_langsmith
+    from infrastructure.observability import setup_opik, setup_langsmith
     OBSERVABILITY_AVAILABLE = True
 except ImportError:
     OBSERVABILITY_AVAILABLE = False
-    print("⚠️  Observability modules not available. Install opik and langsmith for full observability.")
+    print("WARNING: Observability modules not available. Install opik and langsmith for full observability.")
 
 # Create FastAPI app
 app = FastAPI(
@@ -257,7 +257,8 @@ async def start_game(request: StartGameRequest):
                 "portfolio": portfolio_dict,  # DYNAMIC: User's actual tickers and allocations
                 "portfolio_value": float(portfolio_data.data[0]["total_value"]),
                 "risk_profile": portfolio_data.data[0]["risk_profile"],
-                "current_round": 0
+                "current_round": 0,
+                "initial_portfolio_value": float(portfolio_data.data[0]["total_value"])  # Save initial for final P/L
             }
         else:
             # Use in-memory data (fallback)
@@ -267,7 +268,8 @@ async def start_game(request: StartGameRequest):
                 "portfolio": portfolio["positions"],  # DYNAMIC: User's actual tickers
                 "portfolio_value": portfolio["total_value"],
                 "risk_profile": portfolio["risk_profile"],
-                "current_round": 0
+                "current_round": 0,
+                "initial_portfolio_value": portfolio["total_value"]  # Save initial for final P/L
             }
         
         return {
@@ -302,10 +304,29 @@ async def start_round(game_id: str, round_number: int):
         
         # Fetch DYNAMIC game session data (user's actual portfolio)
         game_session = game_sessions_store[game_id]
+
+        # Refresh portfolio snapshot from Supabase to ensure latest persisted values carry over
+        if SUPABASE_AVAILABLE:
+            try:
+                portfolio_id = game_session["portfolio_id"]
+                portfolio_data = supabase.table("portfolios").select("*").eq("id", portfolio_id).execute()
+                positions_data = supabase.table("positions").select("*").eq("portfolio_id", portfolio_id).execute()
+                if portfolio_data.data and positions_data.data is not None:
+                    # Update cached total value
+                    game_session["portfolio_value"] = float(portfolio_data.data[0]["total_value"])
+                    # Update cached allocations map
+                    game_session["portfolio"] = {
+                        pos["ticker"]: float(pos["allocation"]) for pos in positions_data.data
+                    }
+            except Exception as e:
+                print(f"Warning: Failed to refresh portfolio from Supabase: {e}")
+
+        # Track current round in cache
+        game_session["current_round"] = round_number
         
         # Log round start to Opik
         try:
-            from backend.infrastructure.observability.opik_tracer import log_game_event
+            from infrastructure.observability.opik_tracer import log_game_event
             log_game_event("round_start", {
                 "game_id": game_id,
                 "round_number": round_number,
@@ -396,7 +417,7 @@ async def submit_decision(request: SubmitDecisionRequest):
             )
         
         # Get current price for the DYNAMIC ticker
-        from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+        from infrastructure.yfinance_adapter.price_fetcher import get_current_price
         try:
             current_price = await get_current_price(ticker)
         except Exception as e:
@@ -420,12 +441,26 @@ async def submit_decision(request: SubmitDecisionRequest):
         # Update game session cache with new portfolio values
         if result.get("portfolio"):
             game_session["portfolio_value"] = result["portfolio"]["new_total_value"]
-            
             # Update DYNAMIC portfolio allocations
             game_session["portfolio"] = {
                 pos["ticker"]: pos["allocation"] 
                 for pos in result["portfolio"]["positions"]
             }
+        elif result.get("portfolio_min"):
+            # Fallback for in-memory modes if full portfolio is not present
+            game_session["portfolio_value"] = result["portfolio_min"]["portfolio_value"]
+            game_session["portfolio"] = result["portfolio_min"]["allocations"]
+
+        # Cache round outcome for retrieval (in-memory fallback)
+        try:
+            game_session[f"round_{request.round_number}_outcome"] = {
+                "pl_dollars": result.get("pl_dollars"),
+                "pl_percent": result.get("pl_percent"),
+                "ticker": ticker,
+                "new_total_value": result.get("portfolio", {}).get("new_total_value") if result.get("portfolio") else game_session.get("portfolio_value")
+            }
+        except Exception:
+            pass
         
         return {
             "success": True,
@@ -449,13 +484,73 @@ async def get_final_report(game_id: str):
     - Summary stats
     """
     try:
-        result = await generate_final_report_handler.execute(game_id=game_id)
+        # If Supabase is not available, use in-memory values for final summary augmentation
+        report = await generate_final_report_handler.execute(game_id=game_id)
+        if not SUPABASE_AVAILABLE and game_id in game_sessions_store:
+            sess = game_sessions_store[game_id]
+            initial_val = float(sess.get("initial_portfolio_value", 1_000_000))
+            final_val = float(sess.get("portfolio_value", initial_val))
+            total_pl = final_val - initial_val
+            total_return_pct = (total_pl / initial_val * 100) if initial_val > 0 else 0.0
+            # Merge into report summary without altering behavioral metrics
+            if "summary" in report:
+                report["summary"].update({
+                    "final_portfolio_value": round(final_val, 2),
+                    "total_pl": round(total_pl, 2),
+                    "total_return_pct": round(total_return_pct, 2)
+                })
+        result = report
         
         return {
             "success": True,
             "report": result
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/game/{game_id}/round/{round_number}/outcome")
+async def get_round_outcome(game_id: str, round_number: int):
+    """
+    Retrieve a round's outcome (P/L) so the frontend can display it reliably.
+    Prefers Supabase data; falls back to in-memory cache.
+    """
+    try:
+        # Prefer Supabase game_rounds table
+        if SUPABASE_AVAILABLE:
+            resp = supabase.table("game_rounds").select("ticker, pl_dollars, pl_percent, round_number").eq("session_id", game_id).eq("round_number", round_number).execute()
+            if resp.data and len(resp.data) > 0:
+                row = resp.data[0]
+                return {
+                    "success": True,
+                    "round": {
+                        "round_number": row.get("round_number", round_number),
+                        "ticker": row.get("ticker"),
+                        "pl_dollars": row.get("pl_dollars", 0.0),
+                        "pl_percent": row.get("pl_percent", 0.0)
+                    }
+                }
+        
+        # Fallback to in-memory cache
+        if game_id not in game_sessions_store:
+            raise HTTPException(status_code=404, detail=f"Game {game_id} not found")
+        sess = game_sessions_store[game_id]
+        outcome = sess.get(f"round_{round_number}_outcome")
+        if not outcome:
+            raise HTTPException(status_code=404, detail=f"Outcome for round {round_number} not found")
+        
+        return {
+            "success": True,
+            "round": {
+                "round_number": round_number,
+                "ticker": outcome.get("ticker"),
+                "pl_dollars": outcome.get("pl_dollars", 0.0),
+                "pl_percent": outcome.get("pl_percent", 0.0)
+            }
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -512,10 +607,29 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                     continue
                 
                 game_session = game_sessions_store[game_id]
+
+                # Refresh portfolio snapshot from Supabase to ensure latest persisted values carry over
+                if SUPABASE_AVAILABLE:
+                    try:
+                        portfolio_id = game_session["portfolio_id"]
+                        portfolio_data = supabase.table("portfolios").select("*").eq("id", portfolio_id).execute()
+                        positions_data = supabase.table("positions").select("*").eq("portfolio_id", portfolio_id).execute()
+                        if portfolio_data.data and positions_data.data is not None:
+                            # Update cached total value
+                            game_session["portfolio_value"] = float(portfolio_data.data[0]["total_value"])
+                            # Update cached allocations map
+                            game_session["portfolio"] = {
+                                pos["ticker"]: float(pos["allocation"]) for pos in positions_data.data
+                            }
+                    except Exception as e:
+                        print(f"Warning: Failed to refresh portfolio from Supabase: {e}")
+
+                # Track current round in cache
+                game_session["current_round"] = round_number
                 
                 # Log round start to Opik
                 try:
-                    from backend.infrastructure.observability.opik_tracer import log_game_event
+                    from infrastructure.observability.opik_tracer import log_game_event
                     log_game_event("round_start", {
                         "game_id": game_id,
                         "round_number": round_number,
@@ -595,7 +709,7 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                     continue
                 
                 # Get current price for the DYNAMIC ticker
-                from backend.infrastructure.yfinance_adapter.price_fetcher import get_current_price
+                from infrastructure.yfinance_adapter.price_fetcher import get_current_price
                 try:
                     current_price = await get_current_price(ticker)
                 except Exception as e:
@@ -618,12 +732,15 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                 # Update game session cache with new portfolio values
                 if decision_result.get("portfolio"):
                     game_session["portfolio_value"] = decision_result["portfolio"]["new_total_value"]
-                    
                     # Update DYNAMIC portfolio allocations
                     game_session["portfolio"] = {
                         pos["ticker"]: pos["allocation"] 
                         for pos in decision_result["portfolio"]["positions"]
                     }
+                elif decision_result.get("portfolio_min"):
+                    # Fallback for in-memory modes if full portfolio is not present
+                    game_session["portfolio_value"] = decision_result["portfolio_min"]["portfolio_value"]
+                    game_session["portfolio"] = decision_result["portfolio_min"]["allocations"]
                 
                 await websocket.send_json({
                     "type": "outcome",
