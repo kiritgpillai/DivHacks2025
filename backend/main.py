@@ -495,6 +495,8 @@ async def get_final_report(game_id: str):
             final_val = float(sess.get("portfolio_value", initial_val))
             total_pl = final_val - initial_val
             total_return_pct = (total_pl / initial_val * 100) if initial_val > 0 else 0.0
+            # Cap the return percentage at reasonable limits to prevent extreme values
+            total_return_pct = max(-100.0, min(1000.0, total_return_pct))
             # Merge into report summary without altering behavioral metrics
             if "summary" in report:
                 report["summary"].update({
