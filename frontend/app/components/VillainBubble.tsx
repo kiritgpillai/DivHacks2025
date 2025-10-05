@@ -57,7 +57,7 @@ export default function VillainBubble({ villainTake }: VillainBubbleProps) {
         <div className="flex items-start gap-2 text-villain-300 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <p className="text-xs">
-            The Villain is <strong>intentionally misleading</strong> you. Can you resist emotional manipulation?
+            The Villain's motives are <strong>unclear</strong>. Are they trying to help you... or mislead you?
           </p>
         </div>
       </div>

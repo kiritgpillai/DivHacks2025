@@ -137,7 +137,7 @@ python test_backend.py
    - Allocate your $1,000,000 budget
    - Choose your risk profile (Risk-On, Balanced, Risk-Off)
 
-2. **Play 5 Rounds**
+2. **Play 3 Rounds**
    - Read the market event
    - Listen to the Villain's hot take (intentionally misleading!)
    - (Optional) Open the Data tab to see:

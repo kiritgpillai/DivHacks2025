@@ -28,38 +28,38 @@ Manage player portfolios with precision. Validate tickers, fetch current prices,
 
 ### Portfolio Creation
 ```
-1. Think: Need to validate AAPL ticker
-2. Act: validate_ticker("AAPL")
-3. Observe: {"valid": true, "current_price": 195.50}
-4. Think: Check if $300,000 allocation is within budget
-5. Act: check_allocation({"AAPL": 300000, "TSLA": 400000, "MSFT": 300000}, 1000000)
-6. Observe: {"valid": true, "remaining": 0}
+1. Think: Need to validate [TICKER] ticker
+2. Act: validate_ticker("[TICKER]")
+3. Observe: {"valid": true, "current_price": [PRICE]}
+4. Think: Check if [ALLOCATION] allocation is within budget
+5. Act: check_allocation(portfolio_dict, total_budget)
+6. Observe: {"valid": true, "remaining": [REMAINING]}
 7. Final Answer: Portfolio created successfully
 ```
 
 ### Get Fundamentals
 ```
-1. Think: Player needs fundamentals for TSLA
-2. Act: get_fundamentals("TSLA")
-3. Observe: {"pe_ratio": 45.2, "beta": 1.85, "volatility_30d": 0.42, "yoy_growth": 0.18}
+1. Think: Player needs fundamentals for [TICKER]
+2. Act: get_fundamentals("[TICKER]")
+3. Observe: {"pe_ratio": [X.X], "beta": [X.XX], "volatility_30d": [X.XX], "yoy_growth": [X.XX]}
 4. Final Answer: Return fundamentals JSON
 ```
 
 ### Apply Decision
 ```
-1. Think: Player chose SELL_HALF on TSLA with +$5,560 P/L
-2. Act: apply_decision(portfolio, "TSLA", "SELL_HALF", 5560)
-3. Observe: Portfolio updated, cash increased, position size halved
+1. Think: Player chose [DECISION] on [TICKER] with +$[P/L] P/L
+2. Act: apply_decision(portfolio, "[TICKER]", "[DECISION]", [P/L])
+3. Observe: Portfolio updated, cash increased, position size [changed]
 4. Think: Recalculate total portfolio value
 5. Act: Calculate new total value
-6. Final Answer: Portfolio value updated from $1,000,000 to $1,005,560
+6. Final Answer: Portfolio value updated from $[OLD_VALUE] to $[NEW_VALUE]
 ```
 
 ## Guidelines
 
 ### Validation Rules
 - Check ticker exists before creating positions
-- Ensure allocations sum to exactly $1,000,000 (initial budget)
+- Ensure allocations sum to the total budget (dynamic based on user's portfolio)
 - Validate position sizes respect risk profile limits:
   - Risk-On: Max 50% per position
   - Balanced: Max 33% per position

@@ -98,10 +98,13 @@ export default function DataTab({ data }: DataTabProps) {
       </div>
 
       {/* Historical Outcomes */}
-      {data.historical_outcomes && (
+      {data.historical_outcomes && 
+       data.historical_outcomes.sell_all && 
+       data.historical_outcomes.sell_half && 
+       data.historical_outcomes.hold && (
         <div className="border-t border-gray-700 pt-4">
           <h4 className="text-sm font-semibold text-gray-400 mb-3">
-            Historical Outcomes ({data.historical_outcomes.similar_cases} similar cases)
+            Historical Outcomes ({data.historical_outcomes.similar_cases || 0} similar cases)
           </h4>
           <div className="space-y-2 text-xs">
             <OutcomeRow

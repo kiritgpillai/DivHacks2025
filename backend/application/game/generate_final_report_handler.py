@@ -69,19 +69,19 @@ class GenerateFinalReportHandler:
         ]
         
         # Aggregate behavior
-        metrics_result = await aggregate_behavior(json.dumps(decision_logs))
+        metrics_result = await aggregate_behavior.ainvoke({"decision_logs": json.dumps(decision_logs)})
         metrics = json.loads(metrics_result)
         
         # Classify profile
-        profile_result = await classify_profile(json.dumps(metrics))
+        profile_result = await classify_profile.ainvoke({"metrics": json.dumps(metrics)})
         profile_data = json.loads(profile_result)
         profile = profile_data["profile"]
         
         # Generate coaching
-        coaching_result = await generate_coaching(
-            json.dumps(decision_logs),
-            profile
-        )
+        coaching_result = await generate_coaching.ainvoke({
+            "decision_logs": json.dumps(decision_logs),
+            "profile": profile
+        })
         coaching_data = json.loads(coaching_result)
         coaching_tips = coaching_data["coaching"]
         

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Market Mayhem** is a portfolio-building, news-driven investing game where players compete against a trash-talking Villain AI. Players start with $1,000,000, build a portfolio of 3-6 stocks, and navigate 5-7 rounds of real market events while using a Data tab to make informed decisions.
+**Market Mayhem** is a portfolio-building, news-driven investing game where players compete against a trash-talking Villain AI. Players start with $1,000,000, build a portfolio of 3-6 stocks, and navigate 3 rounds of real market events while using a Data tab to make informed decisions.
 
 ---
 
@@ -290,7 +290,7 @@ Player starts game → Connect WebSocket
   → Server sends: {"type": "data_update", "headlines": [...], "fundamentals": {...}, "historical": [...]}
   → Player makes decision → Send: {"type": "decision", "action": "SELL_HALF", "opened_data_tab": true}
   → Server sends: {"type": "outcome", "pl": {...}, "new_portfolio_value": 1050000}
-  → Repeat for 5-7 rounds
+  → Repeat for 3 rounds
   → Server sends: {"type": "game_complete", "final_report": {...}}
 ```
 
