@@ -174,9 +174,9 @@ Guidelines:
 - Focus on improvement frameworks
 - Each tip should be 1-2 sentences
 
-Format: Return JSON array of tip strings.
+CRITICAL: Return ONLY a valid JSON array of strings. No other text.
 
-Example for Rational profile:
+Example format:
 [
   "In downgrade scenarios, your 'Sell Half' strategy outperformed 'Sell All' by 4% median—continue partial vs full exits.",
   "You chased NVDA after 3 up days—wait for consolidation on parabolic moves.",
@@ -188,11 +188,35 @@ Generate coaching tips now:"""
         response = model.generate_content(prompt)
         
         # Try to parse JSON from response
+        tips = []
         try:
-            tips = json.loads(response.text)
-        except:
-            # Fallback: split by newlines
-            tips = [line.strip('- ') for line in response.text.split('\n') if line.strip()][:4]
+            # Clean the response text first
+            response_text = response.text.strip()
+            
+            # Try to extract JSON array from the response
+            if response_text.startswith('[') and response_text.endswith(']'):
+                tips = json.loads(response_text)
+            else:
+                # Look for JSON array in the response
+                start_idx = response_text.find('[')
+                end_idx = response_text.rfind(']')
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_text = response_text[start_idx:end_idx+1]
+                    tips = json.loads(json_text)
+                else:
+                    raise ValueError("No JSON array found in response")
+            
+            # Validate tips are non-empty strings
+            tips = [tip.strip() for tip in tips if isinstance(tip, str) and tip.strip()]
+            
+            # Ensure we have at least 2 tips
+            if len(tips) < 2:
+                raise ValueError("Insufficient tips generated")
+                
+        except Exception as parse_error:
+            print(f"Failed to parse Gemini response: {parse_error}")
+            print(f"Response text: {response.text}")
+            raise parse_error
         
         return json.dumps({
             "profile": profile,
@@ -201,6 +225,7 @@ Generate coaching tips now:"""
         })
         
     except Exception as e:
+        print(f"Error in generate_coaching: {e}")
         # Fallback coaching by profile
         fallback_coaching = {
             "Rational": [
