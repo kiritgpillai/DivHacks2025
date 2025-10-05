@@ -43,82 +43,76 @@ def trace_agent_call(agent_name: str):
     """
     def decorator(func):
         @wraps(func)
+        @opik.track(
+            name=f"{agent_name}_call",
+            project_name="market-mayhem",
+            tags=[agent_name, "agent_call"]
+        )
         async def async_wrapper(*args, **kwargs):
             try:
-                # Start Opik trace
-                with opik.track(
-                    name=f"{agent_name}_call",
-                    project_name="market-mayhem",
-                    tags=[agent_name, "agent_call"]
-                ) as trace:
-                    # Extract state for logging
-                    state = args[0] if args else kwargs.get('state', {})
-                    
-                    # Log input
-                    trace.log_input({
-                        "agent": agent_name,
-                        "state_keys": list(state.keys()) if isinstance(state, dict) else [],
-                        "round": state.get("round_number", 0) if isinstance(state, dict) else 0
-                    })
-                    
-                    # Execute agent
-                    result = await func(*args, **kwargs)
-                    
-                    # Log output
-                    trace.log_output({
-                        "agent": agent_name,
-                        "success": True,
-                        "result_keys": list(result.keys()) if isinstance(result, dict) else []
-                    })
-                    
-                    return result
+                # Extract state for logging
+                state = args[0] if args else kwargs.get('state', {})
+                
+                # Execute agent
+                result = await func(*args, **kwargs)
+                
+                return result
                     
             except Exception as e:
                 # Log error
                 print(f"Error in {agent_name}: {str(e)}")
                 
                 try:
-                    with opik.track(
+                    @opik.track(
                         name=f"{agent_name}_error",
                         project_name="market-mayhem",
                         tags=[agent_name, "error"]
-                    ) as error_trace:
-                        error_trace.log_output({
+                    )
+                    def _log_error():
+                        return {
                             "agent": agent_name,
                             "error": str(e),
                             "success": False
-                        })
+                        }
+                    _log_error()
                 except:
                     pass
                 
                 raise
         
         @wraps(func)
+        @opik.track(
+            name=f"{agent_name}_call",
+            project_name="market-mayhem",
+            tags=[agent_name, "agent_call"]
+        )
         def sync_wrapper(*args, **kwargs):
             try:
-                with opik.track(
-                    name=f"{agent_name}_call",
-                    project_name="market-mayhem",
-                    tags=[agent_name, "agent_call"]
-                ) as trace:
-                    state = args[0] if args else kwargs.get('state', {})
-                    
-                    trace.log_input({
-                        "agent": agent_name,
-                        "state_keys": list(state.keys()) if isinstance(state, dict) else []
-                    })
-                    
-                    result = func(*args, **kwargs)
-                    
-                    trace.log_output({
-                        "agent": agent_name,
-                        "success": True
-                    })
-                    
-                    return result
+                state = args[0] if args else kwargs.get('state', {})
+                
+                result = func(*args, **kwargs)
+                
+                return result
                     
             except Exception as e:
                 print(f"Error in {agent_name}: {str(e)}")
+                
+                try:
+                    @opik.track(
+                        name=f"{agent_name}_error",
+                        project_name="market-mayhem",
+                        tags=[agent_name, "error"]
+                    )
+                    def _log_error():
+                        return {
+                            "agent": agent_name,
+                            "error": str(e),
+                            "success": False
+                        }
+                    _log_error()
+                except:
+                    pass
+                
                 raise
         
         # Return appropriate wrapper based on function type
@@ -139,13 +133,16 @@ def log_game_event(event_type: str, data: Dict[str, Any]):
         log_game_event("decision_submitted", {"decision": "HOLD"})
     """
     try:
-        with opik.track(
+        # Create a simple function to wrap the event logging
+        @opik.track(
             name=f"game_{event_type}",
             project_name="market-mayhem",
             tags=["game_event", event_type]
-        ) as trace:
-            trace.log_input(data)
-            trace.log_output({"event": event_type, "logged": True})
+        )
+        def _log_event():
+            return {"event": event_type, "logged": True, "data": data}
+        
+        _log_event()
     except Exception as e:
         print(f"Failed to log event: {str(e)}")
 
@@ -170,22 +167,22 @@ def log_llm_call(
         )
     """
     try:
-        with opik.track(
+        @opik.track(
             name="llm_call",
             project_name="market-mayhem",
             tags=["llm", model]
-        ) as trace:
-            trace.log_input({
+        )
+        def _log_llm():
+            return {
                 "model": model,
                 "prompt": prompt[:500],  # Truncate long prompts
-                "prompt_length": len(prompt)
-            })
-            
-            trace.log_output({
+                "prompt_length": len(prompt),
                 "response": response[:500],
                 "response_length": len(response),
                 "tokens": tokens,
                 "latency_seconds": latency
-            })
+            }
+        
+        _log_llm()
     except Exception as e:
         print(f"Failed to log LLM call: {str(e)}")
